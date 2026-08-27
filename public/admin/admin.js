@@ -10,6 +10,8 @@ const ms = m => {
 
 let library = [], items = [], seams = [], ws;
 let blocks = [], autofill = { enabled:false, poolIds:[], order:'random' }, pools = [], coverage = null;
+let chans = [], curCh = localStorage.getItem('lp.ch') || '';
+const chUrl = p => `/api/channels/${encodeURIComponent(curCh)}${p}`;
 let selBlk = null, tab = 'grid';
 
 const DOW = ['월','화','수','목','금','토','일'];
@@ -187,15 +189,25 @@ async function renderSources() {
 }
 
 /* ── 주간 편성 그리드 ────────────────────────────── */
+async function loadChannels() {
+  chans = await (await fetch('/api/channels')).json();
+  if (!chans.find(c => c.id === curCh)) curCh = chans[0]?.id || '';
+  localStorage.setItem('lp.ch', curCh);
+  $('chSel').innerHTML = chans.map(c =>
+    `<option value="${c.id}" ${c.id===curCh?'selected':''}>${esc(c.name)} · ${c.blockCount}블록 · ` +
+    `${c.rundownItems}항목</option>`).join('');
+}
+
 async function loadBlocks() {
-  const r = await (await fetch('/api/blocks')).json();
+  if (!curCh) return;
+  const r = await (await fetch(chUrl('/blocks'))).json();
   blocks = r.blocks; autofill = r.autofill; coverage = r.coverage;
   pools = await (await fetch('/api/pools')).json();
   renderGrid();
 }
 
 async function saveBlocks() {
-  const r = await (await fetch('/api/blocks', {
+  const r = await (await fetch(chUrl('/blocks'), {
     method:'POST', headers:{'content-type':'application/json'},
     body: JSON.stringify({ blocks, autofill }),
   })).json();
@@ -373,7 +385,7 @@ $('autoBtn').onclick = async () => {
 
 $('genBtn').onclick = async () => {
   $('genBtn').textContent = '생성 중…';
-  const r = await (await fetch('/api/rundown/generate', {
+  const r = await (await fetch(chUrl('/rundown/generate'), {
     method:'POST', headers:{'content-type':'application/json'},
     body: JSON.stringify({ dow: TODAY }),
   })).json();
@@ -384,7 +396,27 @@ $('genBtn').onclick = async () => {
   setTab('rundown'); renderRd();
 };
 
-const renderAll = () => { renderLib(); renderRd(); renderSeams(); renderSources(); loadBlocks(); };
+const renderAll = async () => {
+  await loadChannels();
+  renderLib(); renderRd(); renderSeams(); renderSources(); loadBlocks();
+};
+
+$('chSel').onchange = async e => {
+  curCh = e.target.value; localStorage.setItem('lp.ch', curCh);
+  selBlk = null; items = [];
+  await loadChannels(); await loadBlocks(); renderRd();
+};
+$('chAdd').onclick = async () => {
+  const name = prompt('채널 이름', `채널 ${chans.length + 1}`);
+  if (!name) return;
+  const r = await (await fetch('/api/channels', {
+    method:'POST', headers:{'content-type':'application/json'},
+    body: JSON.stringify({ name }),
+  })).json();
+  curCh = r.id; localStorage.setItem('lp.ch', curCh);
+  selBlk = null; items = [];
+  await loadChannels(); await loadBlocks(); renderRd();
+};
 
 /* ── 조작 ────────────────────────────────────────── */
 $('scan').onclick = async () => {
@@ -395,10 +427,10 @@ $('scan').onclick = async () => {
 };
 $('clear').onclick = () => { items = []; renderRd(); };
 $('save').onclick = async () => {
-  await fetch('/api/rundown', {
+  await fetch(chUrl('/rundown'), {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ id: 'r1', items }),
+    body: JSON.stringify({ items }),
   });
   $('save').textContent = '적용됨';
   setTimeout(() => ($('save').textContent = '출력창에 적용'), 1200);
@@ -410,7 +442,8 @@ $('open').onclick = async () => {
   if (!inElectron) { window.open('/output/', 'lp-output', 'width=960,height=560'); return; }
   const sel = $('display');
   await window.lp.openOutput({
-    id: 'out1',
+    id: 'out_' + curCh,
+    channelId: curCh,
     displayId: sel?.value ? Number(sel.value) : undefined,
     width: 1920, height: 1080,
   });

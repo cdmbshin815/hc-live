@@ -6,7 +6,7 @@ import { WebSocketServer } from 'ws';
 import { createServer } from 'node:http';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { Store } from './store.js';
+import { Store, newChannel } from './store.js';
 import * as localSource from './sources/local.js';
 import * as cloudflare from './sources/cloudflare.js';
 import * as bunny from './sources/bunny.js';
@@ -106,6 +106,51 @@ app.post('/api/sources/:kind/sync', async (req, res) => {
   }
 });
 
+/* ── 채널 ────────────────────────────────────────── */
+// 라이브러리는 공유, 편성·런다운·출력은 채널마다 독립 (기획서 §3.3).
+function channels() { return store.get('channels') || []; }
+function ch(id) { return channels().find(c => c.id === id) || null; }
+function saveChannels(list) { store.set('channels', list); return list; }
+
+// 단일 런다운 시절의 데이터를 채널 1로 옮긴다.
+(function migrate() {
+  if (channels().length) return;
+  const c = newChannel('c1', '채널 1');
+  const legacyBlocks = store.get('blocks');
+  const legacyAuto = store.get('autofill');
+  const legacyRd = store.get('rundown');
+  if (Array.isArray(legacyBlocks) && legacyBlocks.length) c.blocks = legacyBlocks;
+  if (legacyAuto) c.autofill = legacyAuto;
+  if (legacyRd?.items?.length) c.rundown = legacyRd;
+  saveChannels([c]);
+  console.log('[server] 단일 런다운 → 채널 1 로 이관');
+})();
+
+app.get('/api/channels', (_req, res) => res.json(channels().map(c => ({
+  id: c.id, name: c.name, master: c.master,
+  blockCount: c.blocks.length,
+  rundownItems: c.rundown?.items?.length || 0,
+  autofill: c.autofill,
+  outputs: c.outputs || [],
+  coverage: weekCoverage(c.blocks, todayInfo().dateStr),
+}))));
+
+app.post('/api/channels', (req, res) => {
+  const name = String(req.body?.name || '').trim() || `채널 ${channels().length + 1}`;
+  const id = 'c' + Math.random().toString(36).slice(2, 8);
+  const list = [...channels(), newChannel(id, name)];
+  saveChannels(list);
+  broadcast({ type: 'channels' });
+  res.json({ id, name });
+});
+
+app.delete('/api/channels/:id', (req, res) => {
+  if (channels().length <= 1) return res.status(400).json({ error: '채널은 최소 하나 필요합니다' });
+  saveChannels(channels().filter(c => c.id !== req.params.id));
+  broadcast({ type: 'channels' });
+  res.json({ ok: true });
+});
+
 /* ── 편성 블록 · 자동 채움 · 생성 ────────────────── */
 const DOW = ['월', '화', '수', '목', '금', '토', '일'];
 const todayInfo = () => {
@@ -119,30 +164,35 @@ const todayInfo = () => {
 app.get('/api/pools', (_req, res) => res.json(
   derivePools(store.get('library')).map(({ items, ...p }) => p)));
 
-app.get('/api/blocks', (_req, res) => res.json({
-  blocks: store.get('blocks') || [],
-  autofill: store.get('autofill') || { enabled: false, poolIds: [], order: 'random' },
-  coverage: weekCoverage(store.get('blocks') || [], todayInfo().dateStr),
-}));
+app.get('/api/channels/:id/blocks', (req, res) => {
+  const c = ch(req.params.id);
+  if (!c) return res.status(404).json({ error: '없는 채널' });
+  res.json({ blocks: c.blocks, autofill: c.autofill,
+             coverage: weekCoverage(c.blocks, todayInfo().dateStr) });
+});
 
-app.post('/api/blocks', (req, res) => {
-  if (Array.isArray(req.body.blocks)) store.set('blocks', req.body.blocks);
-  if (req.body.autofill) store.set('autofill', req.body.autofill);
-  const payload = {
-    blocks: store.get('blocks') || [],
-    autofill: store.get('autofill'),
-    coverage: weekCoverage(store.get('blocks') || [], todayInfo().dateStr),
-  };
+app.post('/api/channels/:id/blocks', (req, res) => {
+  const list = channels();
+  const c = list.find(x => x.id === req.params.id);
+  if (!c) return res.status(404).json({ error: '없는 채널' });
+  if (Array.isArray(req.body.blocks)) c.blocks = req.body.blocks;
+  if (req.body.autofill) c.autofill = req.body.autofill;
+  saveChannels(list);
+  const payload = { channelId: c.id, blocks: c.blocks, autofill: c.autofill,
+                    coverage: weekCoverage(c.blocks, todayInfo().dateStr) };
   broadcast({ type: 'blocks', ...payload });
   res.json(payload);
 });
 
-app.post('/api/rundown/generate', (req, res) => {
+app.post('/api/channels/:id/rundown/generate', (req, res) => {
+  const list = channels();
+  const c = list.find(x => x.id === req.params.id);
+  if (!c) return res.status(404).json({ error: '없는 채널' });
   const { dow, dateStr } = todayInfo();
   const day = Number.isInteger(req.body?.dow) ? req.body.dow : dow;
   const { items, gaps, coverageMs } = generateRundown({
-    blocks: store.get('blocks') || [],
-    autofill: store.get('autofill') || { enabled: false, poolIds: [] },
+    blocks: c.blocks,
+    autofill: c.autofill || { enabled: false, poolIds: [] },
     library: store.get('library'),
     playlog: store.get('playlog') || {},
     dow: day,
@@ -154,10 +204,10 @@ app.post('/api/rundown/generate', (req, res) => {
     ? `항목이 ${items.length}개입니다. 자동 채움 소재가 짧으면 런다운이 커져 화면과 전송이 무거워집니다.`
     : null;
 
-  const rd = { id: 'r1', dow: day, items, gaps, generatedAt: Date.now() };
-  store.set('rundown', rd);
-  const full = withSchedule(rd);
-  const w = pushWindow(true);
+  c.rundown = { id: 'rd_' + c.id, dow: day, items, gaps, generatedAt: Date.now() };
+  saveChannels(list);
+  const full = withSchedule(c.rundown);
+  const w = pushWindow(c.id, true);
   res.json({ ...full, gaps, coverageMs, dowLabel: DOW[day], warning,
              windowItems: w.items.length });
 });
@@ -209,12 +259,20 @@ function withSchedule(rundown) {
   return { ...rundown, items, totalMs, issues };
 }
 
-app.get('/api/rundown', (_req, res) => res.json(withSchedule(store.get('rundown'))));
-app.post('/api/rundown', (req, res) => {
-  const rd = { id: req.body.id || 'r1', items: Array.isArray(req.body.items) ? req.body.items : [] };
-  store.set('rundown', rd);
-  const full = withSchedule(rd);
-  pushWindow(true);
+app.get('/api/channels/:id/rundown', (req, res) => {
+  const c = ch(req.params.id);
+  if (!c) return res.status(404).json({ error: '없는 채널' });
+  res.json(withSchedule(c.rundown || { items: [] }));
+});
+
+app.post('/api/channels/:id/rundown', (req, res) => {
+  const list = channels();
+  const c = list.find(x => x.id === req.params.id);
+  if (!c) return res.status(404).json({ error: '없는 채널' });
+  c.rundown = { id: 'rd_' + c.id, items: Array.isArray(req.body.items) ? req.body.items : [] };
+  saveChannels(list);
+  const full = withSchedule(c.rundown);
+  pushWindow(c.id, true);
   res.json(full);
 });
 
@@ -233,30 +291,33 @@ function nowMsOfDay(d = new Date()) {
   return ((d.getHours() * 60 + d.getMinutes()) * 60 + d.getSeconds()) * 1000 + d.getMilliseconds();
 }
 
-function currentWindow() {
-  const full = withSchedule(store.get('rundown'));
+function currentWindow(channelId) {
+  const c = ch(channelId);
+  const full = withSchedule(c?.rundown || { items: [] });
   const t = nowMsOfDay();
   const from = t - WINDOW_BACK_MS, to = t + WINDOW_AHEAD_MS;
   const items = full.items.filter(i => i.endMs > from && i.startMs < to);
   return {
-    ...full, items,
+    ...full, items, channelId,
     nowMs: t, windowFrom: from, windowTo: to,
     totalItems: full.items.length,
   };
 }
 
-let lastWindowKey = '';
-function pushWindow(force = false) {
-  const w = currentWindow();
+const lastWindowKey = new Map();
+function pushWindow(channelId, force = false) {
+  const w = currentWindow(channelId);
   const key = w.items.map(i => i.key || i.id).join('|');
-  if (!force && key === lastWindowKey) return w;
-  lastWindowKey = key;
-  broadcast({ type: 'rundown', rundown: w });
+  if (!force && key === lastWindowKey.get(channelId)) return w;
+  lastWindowKey.set(channelId, key);
+  broadcast({ type: 'rundown', channelId, rundown: w }, channelId);
   return w;
 }
-setInterval(() => { if (store.get('rundown')?.items?.length) pushWindow(); }, WINDOW_TICK_MS);
+setInterval(() => {
+  for (const c of channels()) if (c.rundown?.items?.length) pushWindow(c.id);
+}, WINDOW_TICK_MS);
 
-app.get('/api/window', (_req, res) => res.json(currentWindow()));
+app.get('/api/channels/:id/window', (req, res) => res.json(currentWindow(req.params.id)));
 
 /* ── 텔레메트리 (전환 품질 기록) ─────────────────── */
 // 2단계 완료 기준이 "검은 프레임 0" 이므로, 전환마다 실측값을 남긴다.
@@ -271,16 +332,28 @@ const server = createServer(app);
 const wss = new WebSocketServer({ server, path: '/ws' });
 const clients = new Set();
 
-function broadcast(msg) {
+// channelId 를 주면 그 채널의 출력창과 관리 화면(채널 미지정 클라이언트)에만 보낸다.
+// 채널 2의 편성이 채널 1 출력창에 흘러가면 안 된다.
+function broadcast(msg, channelId = null) {
   const s = JSON.stringify(msg);
-  for (const ws of clients) { if (ws.readyState === 1) ws.send(s); }
+  for (const ws of clients) {
+    if (ws.readyState !== 1) continue;
+    if (channelId && ws.channelId && ws.channelId !== channelId) continue;
+    ws.send(s);
+  }
 }
 
-wss.on('connection', ws => {
+wss.on('connection', (ws, req) => {
+  // 출력창은 /ws?ch=c1 로 붙는다. 관리 화면은 채널을 지정하지 않고 전체를 받는다.
+  let cid = null;
+  try { cid = new URL(req.url, 'http://x').searchParams.get('ch'); } catch {}
+  ws.channelId = cid;
   clients.add(ws);
   ws.send(JSON.stringify({
     type: 'hello',
-    rundown: currentWindow(),
+    channelId: cid,
+    rundown: currentWindow(cid || channels()[0]?.id),
+    channels: channels().map(c => ({ id: c.id, name: c.name })),
     library: store.get('library'),
     seams,
   }));
@@ -288,7 +361,7 @@ wss.on('connection', ws => {
   ws.on('message', raw => {
     let m; try { m = JSON.parse(raw); } catch { return; }
     if (m.type === 'seam') {
-      seams.unshift({ ...m.seam, at: Date.now() });
+      seams.unshift({ ...m.seam, channelId: ws.channelId || null, at: Date.now() });
       if (seams.length > 200) seams.pop();
       broadcast({ type: 'seam', seam: seams[0] });
     } else if (m.type === 'play') {
@@ -298,7 +371,8 @@ wss.on('connection', ws => {
     } else if (m.type === 'state') {
       // 장시간 운영에서 메모리가 새는지 보려면 추이를 남겨야 한다 (§9 리스크 4).
       if (m.state?.heapMB != null) {
-        heap.push({ at: Date.now(), mb: m.state.heapMB, items: m.state.total ?? 0 });
+        heap.push({ at: Date.now(), mb: m.state.heapMB, items: m.state.total ?? 0,
+                    channelId: ws.channelId || null });
         if (heap.length > 2000) heap.shift();
       }
       broadcast({ type: 'outputState', from: m.role || 'output', state: m.state });

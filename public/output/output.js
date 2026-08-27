@@ -11,6 +11,8 @@ let ws, rundown = { items: [] }, started = false, lastSeam = null, lastState = n
 // 앱 안(Electron)에서는 자동재생 제한이 없으므로 클릭 없이 바로 시작한다.
 // 무인 운영에서 사람이 버튼을 눌러줘야 한다면 그건 무인이 아니다.
 const AUTO = !!window.lp?.isElectron || new URLSearchParams(location.search).has('autostart');
+// 이 출력창이 담당하는 채널. 서버는 이 채널의 편성만 보낸다 (기획서 §3.3).
+const CHANNEL = new URLSearchParams(location.search).get('ch') || '';
 
 const engine = new SeamlessEngine(stage, {
   onSeam(seam) {
@@ -27,7 +29,7 @@ const engine = new SeamlessEngine(stage, {
 
 /* ── 서버 연결 ───────────────────────────────────── */
 function connect() {
-  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws = new WebSocket(`ws://${location.host}/ws${CHANNEL ? '?ch=' + encodeURIComponent(CHANNEL) : ''}`);
   ws.onmessage = e => {
     const m = JSON.parse(e.data);
     if (m.type === 'hello' || m.type === 'rundown') applyRundown(m.rundown);

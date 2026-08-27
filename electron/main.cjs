@@ -60,7 +60,8 @@ function createOutput(o = {}) {
   });
 
   win.setMenuBarVisibility(false);
-  win.loadURL(url(`/output/?id=${encodeURIComponent(id)}`));
+  const ch = o.channelId ? `&ch=${encodeURIComponent(o.channelId)}` : '';
+  win.loadURL(url(`/output/?id=${encodeURIComponent(id)}${ch}`));
 
   if (o.fullscreen) {
     win.setBounds(display.bounds);
@@ -99,7 +100,14 @@ app.whenReady().then(async () => {
   const { startServer } = await import('../server/index.js');
   port = await startServer();
   createAdmin();
-  if (process.env.LP_AUTO_OUTPUT) createOutput({ id: 'out1', width: 1280, height: 720 });
+  if (process.env.LP_AUTO_OUTPUT) {
+    // LP_AUTO_OUTPUT=c1,c2 처럼 채널을 지정하면 채널마다 출력창을 연다.
+    const chans = String(process.env.LP_AUTO_OUTPUT).split(',').map(x => x.trim()).filter(Boolean);
+    const list = chans.length && chans[0] !== '1' ? chans : ['c1'];
+    list.forEach((cid, i) => createOutput({
+      id: 'out' + (i + 1), channelId: cid, width: 960, height: 540,
+    }));
+  }
 
   app.on('activate', () => { if (!adminWin) createAdmin(); });
 });

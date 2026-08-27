@@ -3,14 +3,22 @@
 import { readFileSync, writeFileSync, renameSync, mkdirSync, existsSync } from 'node:fs';
 import path from 'node:path';
 
+// 라이브러리는 전 채널이 공유하고, 편성·런다운·출력은 채널마다 독립이다 (기획서 §3.3).
 const DEFAULT = {
-  library: [],        // Item[]
-  blocks: [],         // Block[]  — 편성 규칙 (§3.5.1)
-  autofill: { enabled: false, poolIds: [], order: 'random' },
+  library: [],        // Item[] — 전 채널 공유
   playlog: {},        // itemId → 마지막 방영 시각 ('미방영 우선' 순서용)
-  rundown: { id: 'r1', items: [] },
+  channels: [],       // Channel[]
   updatedAt: 0,
 };
+
+export const newChannel = (id, name) => ({
+  id, name,
+  master: '1920x1080',
+  blocks: [],                                              // 편성 규칙 (§3.5.1)
+  autofill: { enabled: false, poolIds: [], order: 'random' },
+  rundown: { id: 'rd_' + id, items: [], gaps: [] },
+  outputs: [],
+});
 
 export class Store {
   constructor(file) {
