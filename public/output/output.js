@@ -23,7 +23,12 @@ const engine = new SeamlessEngine(stage, {
   onState(state) {
     lastState = state;
     standby.classList.toggle('hide', state.status === 'playing');
-    send({ type: 'state', role: 'output', state });
+    // 캡처가 제대로 되려면 출력창의 실제 픽셀 수가 의도한 해상도와 같아야 한다.
+    // 논리 크기만 맞고 devicePixelRatio 가 1이 아니면 캡처 해상도가 어긋난다 (§9 리스크 3).
+    send({ type: 'state', role: 'output', channel: CHANNEL, state: { ...state,
+      viewport: { w: innerWidth, h: innerHeight, dpr: devicePixelRatio,
+                  px: Math.round(innerWidth * devicePixelRatio) + '×' +
+                      Math.round(innerHeight * devicePixelRatio) } } });
   },
 });
 

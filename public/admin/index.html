@@ -99,6 +99,41 @@ tr.bad td{color:var(--warn)}
 .dow button[aria-pressed="true"]{background:var(--ghost);border-color:var(--accent-dim);
   color:var(--accent);font-weight:600}
 .slotrow{display:flex;gap:4px;align-items:center;margin-bottom:4px}
+.mapbox{position:relative;background:#0B0E10;border:1px solid var(--soft);border-radius:6px;
+  padding:12px;margin-bottom:10px;overflow:auto}
+.mon{position:absolute;border-radius:4px;border:1px solid var(--line);background:var(--panel2);
+  padding:4px 6px;display:flex;flex-direction:column;cursor:pointer;overflow:hidden}
+.mon:hover{border-color:var(--accent-dim)}
+.mon .n{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--dim);line-height:1.1}
+.mon .r{font-family:var(--mono);font-size:8.5px;color:var(--faint)}
+.mon .o{font-size:9.5px;margin-top:auto;color:var(--faint);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+.mon.mine{background:var(--ghost);border-color:var(--accent-dim)}
+.mon.mine .n,.mon.mine .o{color:var(--accent)}
+.mon.other{background:rgba(255,194,74,.08);border-color:rgba(255,194,74,.3)}
+.mon.other .o{color:var(--warn)}
+.mon.free{border-style:dashed}
+.mon.sel{outline:2px solid var(--accent);outline-offset:1px}
+.orow{display:grid;grid-template-columns:22px minmax(0,1fr) 74px 58px 30px 26px;align-items:center;
+  gap:7px;padding:6px 8px;border-radius:5px;cursor:pointer;border:1px solid transparent}
+.orow:hover{background:var(--panel2)}
+.orow.sel{background:var(--ghost);border-color:var(--accent-dim)}
+.orow .mono{font-size:11px;color:var(--dim)}
+.orow .au{text-align:center;font-size:13px;border-radius:4px}
+.orow .au.on{background:rgba(91,201,140,.14)}
+.orow .au.off{opacity:.35}
+.addout{display:flex;gap:5px;margin-top:8px}
+.addout button{flex:1;font-size:11px}
+.load{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:11px;color:var(--dim)}
+.scale-opts{display:grid;grid-template-columns:repeat(4,1fr);gap:5px}
+.scale-opt{padding:5px 2px;border:1px solid var(--line);border-radius:4px;background:var(--bg);
+  display:flex;flex-direction:column;align-items:center;gap:4px}
+.scale-opt[aria-pressed="true"]{border-color:var(--accent-dim);background:var(--ghost)}
+.scale-opt span{font-size:9px;color:var(--dim)}
+.scale-opt[aria-pressed="true"] span{color:var(--accent);font-weight:600}
+.sbox{position:relative;width:34px;height:21px;background:#0B0E10;border:1px solid var(--line);
+  border-radius:2px;overflow:hidden}
+.sbox i{position:absolute;background:var(--accent-dim);border-radius:1px}
 .warnbox{padding:7px 9px;border-radius:5px;font-size:11.5px;margin-bottom:8px;
   background:rgba(255,194,74,.08);border:1px dashed rgba(255,194,74,.35);color:#FFD481}
 .pill{display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px}
@@ -153,6 +188,7 @@ tr.bad td{color:var(--warn)}
       <div class="vsw">
         <button id="tabGrid" aria-pressed="true">주간 편성</button>
         <button id="tabRd" aria-pressed="false">런다운</button>
+        <button id="tabOut" aria-pressed="false">출력</button>
       </div>
       <span class="tag" id="rdMeta"></span>
     </div>
@@ -167,6 +203,20 @@ tr.bad td{color:var(--warn)}
         <div class="cbar"><i id="covFill"></i></div><span class="mono" id="covPct">—</span></div>
       <div id="blkInsp"></div>
       <p class="note">빈 시간을 세로로 끌면 블록이 생깁니다(15분 단위). 블록을 누르면 아래에서 편집합니다.</p>
+    </div>
+
+    <div id="paneOut" hidden>
+      <div class="mapbox" id="monMap"></div>
+      <div id="outList"></div>
+      <div class="addout">
+        <button class="btn" id="addMon">+ 모니터 직출력</button>
+        <button class="btn" id="addCap">+ 창 캡처</button>
+        <button class="btn" id="addNdi" disabled>+ NDI (조건부·미구현)</button>
+      </div>
+      <div class="load"><span id="loadTxt">—</span>
+        <div class="cbar"><i id="loadFill"></i></div></div>
+      <div id="outTip"></div>
+      <div id="outInsp"></div>
     </div>
 
     <div id="paneRd" hidden>

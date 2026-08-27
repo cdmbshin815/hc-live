@@ -44,6 +44,7 @@ function connect() {
     if (m.type === 'library') { library = m.items; renderLib(); }
     if (m.type === 'seam')    { seams.unshift(m.seam); renderSeams(); }
     if (m.type === 'seams')   { seams = m.seams; renderSeams(); }
+    if (m.type === 'outputs' && tab === 'output') loadOutputs();
   };
 }
 
@@ -366,16 +367,160 @@ function renderBlkInsp() {
   };
 }
 
+/* ── 출력 관리 (§4.4) ────────────────────────────── */
+let displays = [], outs = { outputs: [], monitorUsed: 0, monitorMax: 4 }, selOut = null;
+const OTYPE = { monitor:['🖥','모니터 직출력'], capture_window:['⬚','창 캡처'], ndi:['◈','NDI'] };
+const SCALES = [['none','1:1'],['fit','여백맞춤'],['fill','꽉채움'],['stretch','늘림']];
+const SBOX = { none:'left:8px;top:4px;width:18px;height:12px',
+               fit:'left:2px;top:4px;width:29px;height:12px',
+               fill:'left:2px;top:-2px;width:29px;height:24px',
+               stretch:'left:2px;top:2px;width:29px;height:16px' };
+const scaleNote = m => ({
+  none:'스케일 없이 원본 픽셀 그대로. 해상도가 정확히 일치할 때만 무왜곡입니다.',
+  fit:'비율을 유지하고 남는 곳은 검은 여백. 기본값이며 왜곡이 없습니다.',
+  fill:'비율을 유지하되 넘치는 부분이 잘립니다.',
+  stretch:'비율을 무시하고 늘립니다. 왜곡이 생깁니다.' }[m]);
+
+async function loadOutputs() {
+  outs = await (await fetch('/api/outputs')).json();
+  if (inElectron && !displays.length) displays = await window.lp.displays();
+  renderOutputs();
+}
+
+function renderOutputs() {
+  // 모니터 배치도 — OS 디스플레이 설정과 같은 상대 위치·비율 (§4.4.1)
+  const box = $('monMap');
+  if (!displays.length) {
+    box.innerHTML = '<div class="empty">브라우저에서는 모니터를 감지할 수 없습니다. ' +
+      'Electron 앱(<code>npm run app</code>)에서 확인하세요.</div>';
+    box.style.height = 'auto';
+  } else {
+    const bw = Math.max(...displays.map(d=>d.x+d.width));
+    const bh = Math.max(...displays.map(d=>d.y+d.height));
+    const k = Math.min(((box.clientWidth||460)-40)/bw, 150/bh);
+    box.style.height = (bh*k+24)+'px';
+    box.innerHTML = displays.map((d,i) => {
+      const own = outs.outputs.find(o => o.type==='monitor' && String(o.displayId)===String(d.id));
+      const mine = own && own.channelId === curCh;
+      const cls = mine ? 'mine' : own ? 'other' : 'free';
+      const label = mine ? '● 이 채널' : own ? esc(own.channelName) : '비어 있음';
+      return `<div class="mon ${cls} ${own && own.id===selOut ? 'sel':''}" data-disp="${d.id}"
+        style="left:${d.x*k+12}px;top:${d.y*k+12}px;width:${d.width*k}px;height:${d.height*k}px">
+        <span class="n">${i+1}</span><span class="r">${d.width}×${d.height}</span>
+        <span class="o">${label}</span></div>`;
+    }).join('');
+    box.querySelectorAll('[data-disp]').forEach(el => el.onclick = () => clickMonitor(el.dataset.disp));
+  }
+
+  const mine = outs.outputs.filter(o => o.channelId === curCh);
+  $('outList').innerHTML = mine.length ? mine.map(o => {
+    const d = displays.find(x => String(x.id)===String(o.displayId));
+    const [ic,name] = OTYPE[o.type] || ['?',o.type];
+    return `<div class="orow ${o.id===selOut?'sel':''}" data-out="${o.id}">
+      <span>${ic}</span>
+      <span class="t">${name}${d?` <span class="tag">· ${esc(d.label)}</span>`:''}</span>
+      <span class="mono">${o.w}×${o.h}</span>
+      <span class="mono">${(SCALES.find(s=>s[0]===o.scale)||['','—'])[1]}</span>
+      <span class="au ${o.audio?'on':'off'}" data-au="${o.id}" title="이 출력에서 소리">${o.audio?'🔊':'🔇'}</span>
+      <button class="x" data-delout="${o.id}">×</button></div>`;
+  }).join('') : '<div class="empty">출력이 없습니다. 배치도에서 빈 모니터를 클릭하거나 아래에서 추가하세요.</div>';
+
+  $('outList').querySelectorAll('[data-out]').forEach(el => el.onclick = e => {
+    if (e.target.dataset.au || e.target.dataset.delout) return;
+    selOut = el.dataset.out; renderOutputs();
+  });
+  $('outList').querySelectorAll('[data-au]').forEach(el => el.onclick = async e => {
+    e.stopPropagation();
+    await fetch(`/api/channels/${curCh}/outputs/${el.dataset.au}`, {
+      method:'PATCH', headers:{'content-type':'application/json'},
+      body: JSON.stringify({ audio:true }) });
+    loadOutputs();
+  });
+  $('outList').querySelectorAll('[data-delout]').forEach(el => el.onclick = async e => {
+    e.stopPropagation();
+    await fetch(`/api/channels/${curCh}/outputs/${el.dataset.delout}`, { method:'DELETE' });
+    if (selOut === el.dataset.delout) selOut = null;
+    loadOutputs();
+  });
+
+  const used = outs.outputs.length, cap = 4;
+  $('loadTxt').textContent = `디코더 ${used} / 권장 ${cap} · 모니터 ${outs.monitorUsed}/${outs.monitorMax}`;
+  $('loadFill').style.width = Math.min(100, used/cap*100) + '%';
+  $('loadFill').style.background = used > cap ? 'var(--warn)' : 'var(--accent-dim)';
+  $('addMon').disabled = outs.monitorUsed >= outs.monitorMax;
+  $('outTip').innerHTML = mine.length >= 3
+    ? '<div class="warnbox">출력이 3개 이상입니다. 여러 모니터에 <b>같은 화면</b>을 띄우는 것이 ' +
+      '목적이라면 앱 미러 대신 <b>OS 디스플레이 미러링</b>을 쓰십시오 — 디코딩이 1회로 줄어듭니다.</div>' : '';
+  renderOutInsp();
+}
+
+function renderOutInsp() {
+  const o = outs.outputs.find(x => x.id === selOut && x.channelId === curCh);
+  if (!o) { $('outInsp').innerHTML = ''; return; }
+  const d = displays.find(x => String(x.id)===String(o.displayId));
+  $('outInsp').innerHTML = `<div class="bi">
+    <label>유형</label><div class="v">${(OTYPE[o.type]||[])[1] || o.type}</div>
+    <p class="note">생성 후 변경할 수 없습니다. 바꾸려면 삭제하고 다시 만드세요.</p>
+    <label>해상도</label><div class="row2">
+      <input id="oW" value="${o.w}"><input id="oH" value="${o.h}"></div>
+    ${d ? `<p class="note">모니터 감지값 ${d.width}×${d.height}${(d.width!==o.w||d.height!==o.h)?' — 다르게 지정됨':' (자동 적용)'}</p>`:''}
+    <label>스케일 모드</label><div class="scale-opts" id="oScale">${SCALES.map(([v,l])=>
+      `<button class="scale-opt" data-s="${v}" aria-pressed="${o.scale===v}">
+       <span class="sbox"><i style="${SBOX[v]}"></i></span><span>${l}</span></button>`).join('')}</div>
+    <p class="note">${scaleNote(o.scale)}</p>
+    <label>오디오</label>
+    <button class="btn ${o.audio?'pri':''}" id="oAu" style="width:100%">${o.audio
+      ? '🔊 이 출력에서 소리 남' : '🔇 음소거 — 눌러서 이 출력으로'}</button>
+    <p class="note">채널당 하나의 출력만 소리를 냅니다.</p>
+  </div>`;
+  const save = b => fetch(`/api/channels/${curCh}/outputs/${o.id}`, {
+    method:'PATCH', headers:{'content-type':'application/json'}, body: JSON.stringify(b) })
+    .then(loadOutputs);
+  $('oW').onchange = e => save({ w:+e.target.value });
+  $('oH').onchange = e => save({ h:+e.target.value });
+  document.querySelectorAll('#oScale button').forEach(b => b.onclick = () => save({ scale:b.dataset.s }));
+  $('oAu').onclick = () => save({ audio:true });
+}
+
+async function addOutput(body) {
+  const r = await fetch(`/api/channels/${curCh}/outputs`, {
+    method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify(body) });
+  const j = await r.json();
+  if (!r.ok) {
+    if (j.owner && confirm(`${j.owner} 에서 이 모니터를 가져올까요?`)) return addOutput({ ...body, takeover:true });
+    return alert(j.error);
+  }
+  selOut = j.id; loadOutputs();
+}
+
+function clickMonitor(displayId) {
+  const own = outs.outputs.find(o => o.type==='monitor' && String(o.displayId)===String(displayId));
+  if (own && own.channelId === curCh) { selOut = own.id; return renderOutputs(); }
+  const d = displays.find(x => String(x.id)===String(displayId));
+  addOutput({ type:'monitor', displayId, w:d?.width || 1920, h:d?.height || 1080 });
+}
+
+$('addMon').onclick = () => {
+  const free = displays.find(d => !outs.outputs.some(o => o.type==='monitor' && String(o.displayId)===String(d.id)));
+  if (!free) return alert('배정할 수 있는 빈 모니터가 없습니다');
+  clickMonitor(free.id);
+};
+$('addCap').onclick = () => addOutput({ type:'capture_window',
+  displayId: displays[0]?.id ?? null, w:1920, h:1080 });
+
 /* ── 탭 · 생성 ───────────────────────────────────── */
 function setTab(t) {
   tab = t;
-  $('tabGrid').setAttribute('aria-pressed', t==='grid');
-  $('tabRd').setAttribute('aria-pressed', t==='rundown');
+  for (const [id,v] of [['tabGrid','grid'],['tabRd','rundown'],['tabOut','output']])
+    $(id).setAttribute('aria-pressed', t===v);
   $('paneGrid').hidden = t!=='grid';
   $('paneRd').hidden = t!=='rundown';
+  $('paneOut').hidden = t!=='output';
+  if (t==='output') loadOutputs();
 }
 $('tabGrid').onclick = () => setTab('grid');
 $('tabRd').onclick = () => setTab('rundown');
+$('tabOut').onclick = () => setTab('output');
 
 $('autoBtn').onclick = async () => {
   autofill = { ...autofill, enabled: !autofill.enabled,

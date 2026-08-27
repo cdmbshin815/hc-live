@@ -151,6 +151,84 @@ app.delete('/api/channels/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+/* ── 출력 (§3.7 · §4.4) ──────────────────────────── */
+// 모니터는 전역 자원, 출력은 채널 소유. 모니터 1대에는 출력 1개만 들어간다.
+const MAX_MONITOR_OUT = 4;
+
+function allOutputs() {
+  return channels().flatMap(c => (c.outputs || []).map(o => ({ o, c })));
+}
+
+app.get('/api/outputs', (_req, res) => res.json({
+  outputs: allOutputs().map(({ o, c }) => ({ ...o, channelId: c.id, channelName: c.name })),
+  monitorUsed: allOutputs().filter(x => x.o.type === 'monitor').length,
+  monitorMax: MAX_MONITOR_OUT,
+}));
+
+app.post('/api/channels/:id/outputs', (req, res) => {
+  const list = channels();
+  const c = list.find(x => x.id === req.params.id);
+  if (!c) return res.status(404).json({ error: '없는 채널' });
+  const b = req.body || {};
+
+  if (b.type === 'monitor') {
+    const used = allOutputs().filter(x => x.o.type === 'monitor');
+    const owner = used.find(x => String(x.o.displayId) === String(b.displayId));
+
+    // 소유권 확인이 상한 검사보다 먼저다. 이미 쓰이는 모니터를 가져오는 것은
+    // 총 개수를 늘리지 않으므로 상한에 걸려서는 안 된다.
+    if (owner && owner.c.id !== c.id) {
+      // 다른 채널이 쓰는 모니터는 조용히 뺏지 않는다 (§4.4.2).
+      if (!b.takeover) return res.status(409).json({ error: '다른 채널이 사용 중', owner: owner.c.name });
+      owner.c.outputs = owner.c.outputs.filter(o => o.id !== owner.o.id);
+    } else if (!owner && used.length >= MAX_MONITOR_OUT) {
+      return res.status(400).json({ error: `모니터 출력은 최대 ${MAX_MONITOR_OUT}개입니다` });
+    }
+  }
+
+  const out = {
+    id: 'o' + Math.random().toString(36).slice(2, 8),
+    type: b.type || 'monitor',
+    displayId: b.displayId ?? null,
+    w: b.w || 1920, h: b.h || 1080,
+    scale: b.scale || 'fit',
+    // 채널당 정확히 하나만 소리를 낸다 (§3.4). 첫 출력이 자동으로 담당한다.
+    audio: !(c.outputs || []).length,
+    device: b.device || '시스템 기본',
+    state: 'stopped',
+  };
+  c.outputs = [...(c.outputs || []), out];
+  saveChannels(list);
+  broadcast({ type: 'outputs' });
+  res.json(out);
+});
+
+app.patch('/api/channels/:id/outputs/:oid', (req, res) => {
+  const list = channels();
+  const c = list.find(x => x.id === req.params.id);
+  const o = c?.outputs?.find(x => x.id === req.params.oid);
+  if (!o) return res.status(404).json({ error: '없는 출력' });
+  for (const k of ['w', 'h', 'scale', 'device', 'displayId']) if (k in req.body) o[k] = req.body[k];
+  // 오디오는 라디오 버튼처럼 동작한다 — 켜면 같은 채널의 나머지는 자동 음소거.
+  if (req.body.audio === true) c.outputs.forEach(x => (x.audio = x.id === o.id));
+  saveChannels(list);
+  broadcast({ type: 'outputs' });
+  res.json(o);
+});
+
+app.delete('/api/channels/:id/outputs/:oid', (req, res) => {
+  const list = channels();
+  const c = list.find(x => x.id === req.params.id);
+  if (!c) return res.status(404).json({ error: '없는 채널' });
+  const gone = c.outputs.find(x => x.id === req.params.oid);
+  c.outputs = c.outputs.filter(x => x.id !== req.params.oid);
+  // 오디오 담당이 사라지면 다음 출력이 승계한다 (§3.4).
+  if (gone?.audio && c.outputs.length) c.outputs[0].audio = true;
+  saveChannels(list);
+  broadcast({ type: 'outputs' });
+  res.json({ ok: true });
+});
+
 /* ── 편성 블록 · 자동 채움 · 생성 ────────────────── */
 const DOW = ['월', '화', '수', '목', '금', '토', '일'];
 const todayInfo = () => {
@@ -372,7 +450,7 @@ wss.on('connection', (ws, req) => {
       // 장시간 운영에서 메모리가 새는지 보려면 추이를 남겨야 한다 (§9 리스크 4).
       if (m.state?.heapMB != null) {
         heap.push({ at: Date.now(), mb: m.state.heapMB, items: m.state.total ?? 0,
-                    channelId: ws.channelId || null });
+                    channelId: ws.channelId || null, viewport: m.state.viewport?.px || null });
         if (heap.length > 2000) heap.shift();
       }
       broadcast({ type: 'outputState', from: m.role || 'output', state: m.state });
