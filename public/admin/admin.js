@@ -9,6 +9,18 @@ const ms = m => {
 };
 
 let library = [], items = [], seams = [], ws;
+let blocks = [], autofill = { enabled:false, poolIds:[], order:'random' }, pools = [], coverage = null;
+let selBlk = null, tab = 'grid';
+
+const DOW = ['월','화','수','목','금','토','일'];
+const TODAY = (new Date().getDay() + 6) % 7;
+const HOUR_H = 11;                    // 그리드 1시간 높이(px)
+const hm = ms => String(Math.floor(ms/3600000)).padStart(2,'0') + ':' +
+                 String(Math.floor(ms/60000)%60).padStart(2,'0');
+const parseHm = v => { const p = String(v).split(':').map(Number);
+  return (p.length>=2 && p.every(n=>!isNaN(n))) ? (p[0]*3600+p[1]*60)*1000 : null; };
+const POOL_COLOR = ['#C9A15A','#E0873A','#B85A52','#9B7BC4','#4FB3C9','#5BC98C'];
+const poolColor = id => POOL_COLOR[Math.abs([...String(id)].reduce((a,c)=>a+c.charCodeAt(0),0)) % POOL_COLOR.length];
 
 /* ── 서버 연결 ───────────────────────────────────── */
 function connect() {
@@ -62,15 +74,23 @@ function renderRd() {
   const el = $('rd');
   const total = items.reduce((a, b) => a + b.durationMs, 0);
   $('rdMeta').textContent = items.length ? `${items.length}개 · ${ms(total)}` : '';
-  if (!items.length) { el.innerHTML = '<div class="empty">왼쪽에서 영상을 클릭해 추가하세요.</div>'; return; }
+  if (!items.length) { el.innerHTML = '<div class="empty">주간 편성에서 블록을 만들고 <b>런다운 생성</b>을 누르세요.</div>'; return; }
   let acc = 0;
-  el.innerHTML = items.map((i, n) => {
+  // 항목이 많으면 앞부분만 그린다 — 6천 개를 모두 DOM 에 올릴 이유가 없다.
+  const view = items.slice(0, 300);
+  el.innerHTML = (items.length > view.length
+    ? `<div class="note" style="margin:0 0 6px">전체 ${items.length}개 중 300개만 표시합니다.</div>` : '') +
+    view.map((i, n) => {
     const at = acc; acc += i.durationMs;
+    const mk = i.timing && i.timing !== 'none'
+      ? `<span class="badge2" style="color:#FF8478">${i.timing.toUpperCase()}</span>` : '';
+    const len = (i.trimOutMs ?? i.durationMs) - (i.trimInMs ?? 0);
     return `<div class="row">
       <span class="n">${n + 1}</span>
-      <span class="d">${ms(at)}</span>
+      <span class="d">${i.startMs != null ? ms(i.startMs) : ms(at)}</span>
       <span class="t">${esc(i.title)}</span>
-      <span class="d">${ms(i.durationMs)}</span>
+      ${i.block ? `<span class="badge2">${esc(i.block)}</span>` : ''}${mk}
+      <span class="d">${ms(len)}</span>
       <button class="x" data-del="${i.key}">×</button>
     </div>`;
   }).join('');
@@ -166,7 +186,205 @@ async function renderSources() {
   });
 }
 
-const renderAll = () => { renderLib(); renderRd(); renderSeams(); renderSources(); };
+/* ── 주간 편성 그리드 ────────────────────────────── */
+async function loadBlocks() {
+  const r = await (await fetch('/api/blocks')).json();
+  blocks = r.blocks; autofill = r.autofill; coverage = r.coverage;
+  pools = await (await fetch('/api/pools')).json();
+  renderGrid();
+}
+
+async function saveBlocks() {
+  const r = await (await fetch('/api/blocks', {
+    method:'POST', headers:{'content-type':'application/json'},
+    body: JSON.stringify({ blocks, autofill }),
+  })).json();
+  coverage = r.coverage; renderGrid();
+}
+
+function renderGrid() {
+  $('gdays').innerHTML = '<div></div>' +
+    DOW.map((d,i)=>`<div class="${i===TODAY?'td':''}">${d}</div>`).join('');
+
+  let h = `<div class="hrs">${Array.from({length:24},(_,i)=>
+    `<div class="hr" style="height:${HOUR_H}px">${i%3===0?String(i).padStart(2,'0'):''}</div>`).join('')}</div>`;
+
+  for (let d=0; d<7; d++) {
+    h += `<div class="dcol" data-day="${d}">`;
+    for (let i=1;i<24;i++) h += `<div class="ln ${i%6===0?'mj':''}" style="top:${i*HOUR_H}px"></div>`;
+    for (const b of blocks) {
+      if (!b.days?.includes(d)) continue;
+      for (const [a,z] of b.slots||[]) {
+        const c = poolColor(b.poolId);
+        h += `<div class="blk ${selBlk===b.id?'sel':''}" data-blk="${b.id}"
+          style="top:${a/3600000*HOUR_H}px;height:${Math.max(7,(z-a)/3600000*HOUR_H)}px;
+          background:${c}22;border-color:${c}66;color:${c}"><b>${esc(b.name)}</b></div>`;
+      }
+    }
+    if (autofill.enabled) for (const [a,z] of gapsOf(d)) {
+      if (z-a < 1800000) continue;
+      h += `<div class="blk auto" style="top:${a/3600000*HOUR_H}px;
+        height:${Math.max(7,(z-a)/3600000*HOUR_H)}px"><b>자동</b></div>`;
+    }
+    h += '</div>';
+  }
+  $('grid').innerHTML = h;
+  $('grid').querySelectorAll('[data-blk]').forEach(el =>
+    el.addEventListener('pointerdown', e => { e.stopPropagation();
+      selBlk = el.dataset.blk; renderGrid(); }));
+
+  const booked = coverage ? coverage.bookedMs : 0;
+  const total = coverage ? coverage.totalMs : 1;
+  const pct = autofill.enabled ? 100 : booked/total*100;
+  $('covFill').style.width = pct + '%';
+  $('covTxt').textContent = `블록 ${(booked/3600000).toFixed(1)}시간` +
+    (autofill.enabled ? ` · 자동 채움 ${((total-booked)/3600000).toFixed(1)}시간` : '');
+  $('covPct').textContent = Math.round(pct) + '% 편성';
+  $('autoBtn').textContent = autofill.enabled ? '자동 채움 해제' : '나머지 시간 자동 채움';
+  $('autoBtn').className = 'btn' + (autofill.enabled ? '' : ' pri');
+  renderBlkInsp();
+}
+
+function gapsOf(day) {
+  const s = blocks.filter(b=>b.days?.includes(day)).flatMap(b=>(b.slots||[]).map(([a,z])=>({a,z})))
+    .sort((p,q)=>p.a-q.a);
+  const g=[]; let cur=0;
+  for (const x of s) { if (x.a>cur) g.push([cur,x.a]); cur=Math.max(cur,x.z); }
+  if (cur<86400000) g.push([cur,86400000]);
+  return g;
+}
+
+/* 빈 시간 드래그 → 블록 생성 */
+let gd = null;
+document.addEventListener('pointerdown', e => {
+  const col = e.target.closest('.dcol');
+  if (!col || tab!=='grid' || e.target.closest('.blk')) return;
+  const r = col.getBoundingClientRect();
+  gd = { day:+col.dataset.day, col, y0:e.clientY-r.top, y1:e.clientY-r.top, el:null };
+});
+document.addEventListener('pointermove', e => {
+  if (!gd) return;
+  const r = gd.col.getBoundingClientRect();
+  gd.y1 = Math.max(0, Math.min(24*HOUR_H, e.clientY-r.top));
+  if (!gd.el && Math.abs(gd.y1-gd.y0) > 4) {
+    gd.el = document.createElement('div');
+    gd.el.className = 'blk';
+    gd.el.style.cssText = 'background:var(--ghost);border-color:var(--accent-dim);color:var(--accent)';
+    gd.col.appendChild(gd.el);
+  }
+  if (gd.el) {
+    const t = Math.min(gd.y0,gd.y1), hh = Math.abs(gd.y1-gd.y0);
+    gd.el.style.top = t+'px'; gd.el.style.height = hh+'px';
+    gd.el.innerHTML = `<b>${hm(snapT(t))}–${hm(snapT(t+hh))}</b>`;
+  }
+});
+document.addEventListener('pointerup', async () => {
+  if (!gd) return; const g = gd; gd = null;
+  if (!g.el) return;
+  const a = snapT(Math.min(g.y0,g.y1)), z = snapT(Math.max(g.y0,g.y1));
+  g.el.remove();
+  if (z-a < 900000) return;                       // 15분 미만은 무시
+  const nb = { id:'b'+Math.random().toString(36).slice(2,8), name:'새 편성 블록',
+    poolId: pools[0]?.id || '', days:[g.day], slots:[[a,z]],
+    dateFrom:'2026-01-01', dateTo:'2026-12-31', order:'seq', fit:'loop' };
+  blocks.push(nb); selBlk = nb.id; await saveBlocks();
+});
+const snapT = px => Math.round(px/HOUR_H*4)/4*3600000;   // 15분 스냅
+
+/* 블록 인스펙터 */
+function renderBlkInsp() {
+  const b = blocks.find(x=>x.id===selBlk);
+  if (!b) { $('blkInsp').innerHTML = ''; return; }
+  $('blkInsp').innerHTML = `<div class="bi">
+    <label>블록 이름</label><input id="bName" value="${esc(b.name)}">
+    <label>소스 그룹</label><select id="bPool">${pools.map(p=>
+      `<option value="${p.id}" ${p.id===b.poolId?'selected':''}>${esc(p.name)} (${p.count}편)</option>`).join('')}</select>
+    <label>기간</label><div class="row2">
+      <input id="bFrom" value="${b.dateFrom||''}"><input id="bTo" value="${b.dateTo||''}"></div>
+    <label>요일 · 복수 선택</label><div class="dow" id="bDow">${DOW.map((d,i)=>
+      `<button data-d="${i}" aria-pressed="${b.days.includes(i)}">${d}</button>`).join('')}</div>
+    <label>시간대 · 복수 가능</label><div id="bSlots">${(b.slots||[]).map(([a,z],i)=>
+      `<div class="slotrow"><input data-s="${i}" data-e="a" value="${hm(a)}">
+       <span class="tag">–</span><input data-s="${i}" data-e="z" value="${hm(z)}">
+       <button class="btn" data-del="${i}">×</button></div>`).join('')}</div>
+    <button class="btn" id="bAdd" style="width:100%;margin-top:4px">+ 시간대 추가</button>
+    <div class="row2" style="margin-top:8px">
+      <div style="flex:1"><label>재생 순서</label><select id="bOrder">
+        ${[['seq','순차'],['random','랜덤'],['unaired','미방영 우선']].map(([v,l])=>
+          `<option value="${v}" ${b.order===v?'selected':''}>${l}</option>`).join('')}</select></div>
+      <div style="flex:1"><label>시간 맞춤</label><select id="bFit">
+        ${[['loop','반복'],['filler','필러'],['trim','잘라내기']].map(([v,l])=>
+          `<option value="${v}" ${b.fit===v?'selected':''}>${l}</option>`).join('')}</select></div>
+    </div>
+    <button class="btn" id="bDel" style="width:100%;margin-top:9px;color:var(--err);
+      border-color:rgba(255,107,90,.35)">블록 삭제</button>
+  </div>`;
+
+  const set = (id, fn) => { const el=$(id); if (el) el.onchange = async e => { fn(e.target.value); await saveBlocks(); }; };
+  set('bName', v => b.name = v || '이름 없음');
+  set('bPool', v => b.poolId = v);
+  set('bFrom', v => b.dateFrom = v);
+  set('bTo',   v => b.dateTo = v);
+  set('bOrder',v => b.order = v);
+  set('bFit',  v => b.fit = v);
+  document.querySelectorAll('#bDow button').forEach(x => x.onclick = async () => {
+    const d = +x.dataset.d;
+    b.days = b.days.includes(d) ? b.days.filter(y=>y!==d) : [...b.days,d].sort();
+    if (!b.days.length) b.days = [d];
+    await saveBlocks();
+  });
+  document.querySelectorAll('#bSlots input').forEach(inp => inp.onchange = async () => {
+    const v = parseHm(inp.value); if (v==null) return renderGrid();
+    const i = +inp.dataset.s;
+    if (inp.dataset.e==='a') b.slots[i][0]=v; else b.slots[i][1]= v===0 ? 86400000 : v;
+    if (b.slots[i][1] <= b.slots[i][0]) b.slots[i][1] = b.slots[i][0] + 1800000;
+    await saveBlocks();
+  });
+  document.querySelectorAll('#bSlots [data-del]').forEach(x => x.onclick = async () => {
+    if (b.slots.length < 2) return;
+    b.slots.splice(+x.dataset.del,1); await saveBlocks();
+  });
+  $('bAdd').onclick = async () => {
+    const last = b.slots[b.slots.length-1][1];
+    const a = Math.min(last+3600000, 82800000);
+    b.slots.push([a, Math.min(a+3600000, 86400000)]); await saveBlocks();
+  };
+  $('bDel').onclick = async () => {
+    blocks = blocks.filter(x=>x.id!==b.id); selBlk=null; await saveBlocks();
+  };
+}
+
+/* ── 탭 · 생성 ───────────────────────────────────── */
+function setTab(t) {
+  tab = t;
+  $('tabGrid').setAttribute('aria-pressed', t==='grid');
+  $('tabRd').setAttribute('aria-pressed', t==='rundown');
+  $('paneGrid').hidden = t!=='grid';
+  $('paneRd').hidden = t!=='rundown';
+}
+$('tabGrid').onclick = () => setTab('grid');
+$('tabRd').onclick = () => setTab('rundown');
+
+$('autoBtn').onclick = async () => {
+  autofill = { ...autofill, enabled: !autofill.enabled,
+    poolIds: autofill.poolIds?.length ? autofill.poolIds : pools.map(p=>p.id) };
+  await saveBlocks();
+};
+
+$('genBtn').onclick = async () => {
+  $('genBtn').textContent = '생성 중…';
+  const r = await (await fetch('/api/rundown/generate', {
+    method:'POST', headers:{'content-type':'application/json'},
+    body: JSON.stringify({ dow: TODAY }),
+  })).json();
+  $('genBtn').textContent = '런다운 생성';
+  items = r.items;
+  $('genWarn').hidden = !r.warning;
+  if (r.warning) $('genWarn').textContent = '⚠ ' + r.warning;
+  setTab('rundown'); renderRd();
+};
+
+const renderAll = () => { renderLib(); renderRd(); renderSeams(); renderSources(); loadBlocks(); };
 
 /* ── 조작 ────────────────────────────────────────── */
 $('scan').onclick = async () => {
@@ -174,11 +392,6 @@ $('scan').onclick = async () => {
   library = await (await fetch('/api/library/scan', { method: 'POST' })).json();
   $('scan').textContent = '라이브러리 스캔';
   renderLib();
-};
-$('addAll').onclick = () => {
-  library.filter(i => i.status === 'ready')
-    .forEach(i => items.push({ ...i, key: 'k' + Math.random().toString(36).slice(2, 8) }));
-  renderRd();
 };
 $('clear').onclick = () => { items = []; renderRd(); };
 $('save').onclick = async () => {

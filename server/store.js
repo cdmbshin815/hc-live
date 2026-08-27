@@ -5,6 +5,9 @@ import path from 'node:path';
 
 const DEFAULT = {
   library: [],        // Item[]
+  blocks: [],         // Block[]  — 편성 규칙 (§3.5.1)
+  autofill: { enabled: false, poolIds: [], order: 'random' },
+  playlog: {},        // itemId → 마지막 방영 시각 ('미방영 우선' 순서용)
   rundown: { id: 'r1', items: [] },
   updatedAt: 0,
 };

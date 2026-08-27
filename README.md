@@ -16,7 +16,8 @@
 - [x] 전환 품질 계측 — 전환 간극 평균 11.7ms · 의심 0건
 - [x] 소스 어댑터 레이어 (로컬 · 폴더 · HLS) + HLS 재생 (hls.js)
 - [x] Cloudflare Stream · Bunny Stream 어댑터 *(실계정 미검증)*
-- [ ] 편성 화면 (목업을 실제 데이터에 연결)
+- [x] 편성 파이프라인 — 블록 · 자동 채움 · 런다운 생성 (서버)
+- [x] 주간 편성 화면 (블록 배치 · 커버리지 · 생성)
 - [ ] 장시간·다채널 실측
 
 ## 실행
@@ -43,6 +44,7 @@ npm run app       # Electron 앱
 ```
 electron/main.cjs        앱 셸 — 서버 기동, 관리 창·출력창 관리
 server/index.js          진실의 원천 — 라이브러리·런다운·WS 브로드캐스트
+server/schedule.js       편성 파이프라인 — 블록 → 자동 채움 → 런다운
 server/sources/          소스 어댑터 — local · cloudflare · bunny
 server/probe.js          ffprobe 래퍼 (길이·해상도 실측)
 server/store.js          JSON 스토어

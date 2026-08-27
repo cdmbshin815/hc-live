@@ -10,6 +10,7 @@ import { Store } from './store.js';
 import * as localSource from './sources/local.js';
 import * as cloudflare from './sources/cloudflare.js';
 import * as bunny from './sources/bunny.js';
+import { derivePools, generateRundown, weekCoverage } from './schedule.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const MEDIA_ROOT = path.join(ROOT, 'media');
@@ -105,18 +106,106 @@ app.post('/api/sources/:kind/sync', async (req, res) => {
   }
 });
 
+/* ── 편성 블록 · 자동 채움 · 생성 ────────────────── */
+const DOW = ['월', '화', '수', '목', '금', '토', '일'];
+const todayInfo = () => {
+  const d = new Date();
+  const dow = (d.getDay() + 6) % 7;                     // 월=0
+  const dateStr = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+    .toISOString().slice(0, 10);
+  return { dow, dateStr };
+};
+
+app.get('/api/pools', (_req, res) => res.json(
+  derivePools(store.get('library')).map(({ items, ...p }) => p)));
+
+app.get('/api/blocks', (_req, res) => res.json({
+  blocks: store.get('blocks') || [],
+  autofill: store.get('autofill') || { enabled: false, poolIds: [], order: 'random' },
+  coverage: weekCoverage(store.get('blocks') || [], todayInfo().dateStr),
+}));
+
+app.post('/api/blocks', (req, res) => {
+  if (Array.isArray(req.body.blocks)) store.set('blocks', req.body.blocks);
+  if (req.body.autofill) store.set('autofill', req.body.autofill);
+  const payload = {
+    blocks: store.get('blocks') || [],
+    autofill: store.get('autofill'),
+    coverage: weekCoverage(store.get('blocks') || [], todayInfo().dateStr),
+  };
+  broadcast({ type: 'blocks', ...payload });
+  res.json(payload);
+});
+
+app.post('/api/rundown/generate', (req, res) => {
+  const { dow, dateStr } = todayInfo();
+  const day = Number.isInteger(req.body?.dow) ? req.body.dow : dow;
+  const { items, gaps, coverageMs } = generateRundown({
+    blocks: store.get('blocks') || [],
+    autofill: store.get('autofill') || { enabled: false, poolIds: [] },
+    library: store.get('library'),
+    playlog: store.get('playlog') || {},
+    dow: day,
+    dateStr: req.body?.dateStr || dateStr,
+  });
+  // 짧은 소재로 자동 채움을 돌리면 항목 수가 폭증한다(11초 클립 기준 하루 6천여 개).
+  // 기획서 §5.4 의 "하루 150~300개" 가정은 장편 콘텐츠 기준이다. 넘어가면 알린다.
+  const warning = items.length > 1000
+    ? `항목이 ${items.length}개입니다. 자동 채움 소재가 짧으면 런다운이 커져 화면과 전송이 무거워집니다.`
+    : null;
+
+  const rd = { id: 'r1', dow: day, items, gaps, generatedAt: Date.now() };
+  store.set('rundown', rd);
+  const full = withSchedule(rd);
+  broadcast({ type: 'rundown', rundown: full });
+  res.json({ ...full, gaps, coverageMs, dowLabel: DOW[day], warning });
+});
+
 /* ── 런다운 ──────────────────────────────────────── */
 // 시작 시각은 서버가 계산해 내려준다. 출력창은 계산하지 않는다.
+//
+// 고정 시각 마커 3종을 여기서 적용한다 (§3.5.4).
+//   hard      — 그 시각이 되면 재생 중인 항목을 끊고 시작 (앞 항목이 잘린다)
+//   soft      — 앞 항목이 끝나기를 기다렸다가 시작 (밀림을 허용)
+//   notBefore — 그 시각 전에는 시작하지 않음 (일찍 끝나면 공백)
 function withSchedule(rundown) {
   let cur = 0;
-  const items = rundown.items.map(it => {
-    const dur = it.trimOutMs ?? it.durationMs;
+  const items = (rundown.items || []).map(it => {
     const inMs = it.trimInMs ?? 0;
-    const row = { ...it, startMs: cur, endMs: cur + (dur - inMs) };
-    cur = row.endMs;
-    return row;
+    const outMs = it.trimOutMs ?? it.durationMs;
+    const len = Math.max(0, outMs - inMs);
+
+    let start = cur, gapMs = 0, cutMs = 0, pushMs = 0;
+    const f = it.fixedAt;
+    if (it.timing && it.timing !== 'none' && f != null) {
+      if (it.timing === 'hard') {
+        if (cur > f) cutMs = cur - f; else if (cur < f) gapMs = f - cur;
+        start = f;
+      } else if (it.timing === 'soft') {
+        if (cur > f) { pushMs = cur - f; start = cur; } else { gapMs = f - cur; start = f; }
+      } else {                                   // notBefore
+        if (cur < f) { gapMs = f - cur; start = f; } else start = cur;
+      }
+    }
+    cur = start + len;
+    return { ...it, startMs: start, endMs: cur, gapMs, cutMs, pushMs };
   });
-  return { ...rundown, items, totalMs: cur };
+
+  // Hard 마커에 잘리는 앞 항목은 실제로 잘라서 내려보낸다.
+  // 출력창이 "언제 끊을지"를 다시 판단하게 두면 서버와 답이 갈릴 수 있다.
+  for (let i = 1; i < items.length; i++) {
+    if (items[i].cutMs > 0) {
+      const prev = items[i - 1];
+      const inMs = prev.trimInMs ?? 0;
+      prev.trimOutMs = Math.max(inMs + 500, (prev.trimOutMs ?? prev.durationMs) - items[i].cutMs);
+      prev.endMs = items[i].startMs;
+      prev.trimmedByHard = items[i].cutMs;
+    }
+  }
+
+  const totalMs = items.length ? items[items.length - 1].endMs : 0;
+  const issues = items.reduce((n, x) => n + (x.gapMs > 500 ? 1 : 0) + (x.cutMs > 500 ? 1 : 0), 0);
+  return { ...rundown, items, totalMs, issues };
 }
 
 app.get('/api/rundown', (_req, res) => res.json(withSchedule(store.get('rundown'))));
@@ -159,6 +248,10 @@ wss.on('connection', ws => {
       seams.unshift({ ...m.seam, at: Date.now() });
       if (seams.length > 200) seams.pop();
       broadcast({ type: 'seam', seam: seams[0] });
+    } else if (m.type === 'play') {
+      // '미방영 우선' 순서를 계산하려면 무엇이 언제 나갔는지 알아야 한다.
+      const log = store.get('playlog') || {};
+      if (m.itemId) { log[m.itemId] = Date.now(); store.set('playlog', log); }
     } else if (m.type === 'state') {
       broadcast({ type: 'outputState', from: m.role || 'output', state: m.state });
     }

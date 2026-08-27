@@ -63,6 +63,44 @@ tr.bad td{color:var(--warn)}
 .src-card .acts{display:flex;gap:6px;margin-top:4px}
 .src-card .msg{font-size:11px;margin-top:6px;color:var(--faint)}
 .badge2{font-size:9.5px;padding:1px 5px;border-radius:3px;background:var(--raised);color:var(--dim)}
+.vsw{display:flex;gap:2px;background:var(--bg);padding:3px;border-radius:5px;border:1px solid var(--line)}
+.vsw button{padding:4px 11px;border-radius:3px;font-size:11.5px;color:var(--dim)}
+.vsw button[aria-pressed="true"]{background:var(--raised);color:var(--text);font-weight:600}
+
+.gridwrap{border:1px solid var(--soft);border-radius:6px;overflow:hidden;background:#0B0E10}
+.gdays,.grid{display:grid;grid-template-columns:34px repeat(7,minmax(0,1fr))}
+.gdays{background:var(--panel);border-bottom:1px solid var(--line)}
+.gdays div{padding:4px 0;text-align:center;font-size:10.5px;color:var(--dim)}
+.gdays div.td{color:var(--accent);font-weight:600}
+.hrs{border-right:1px solid var(--soft)}
+.hr{height:11px;font-family:var(--mono);font-size:8.5px;color:var(--faint);text-align:right;
+  padding-right:4px;line-height:1;transform:translateY(-3px)}
+.dcol{position:relative;border-right:1px solid var(--soft);cursor:crosshair;height:264px}
+.dcol .ln{position:absolute;left:0;right:0;height:1px;background:#161D22}
+.dcol .ln.mj{background:#222B31}
+.blk{position:absolute;left:1px;right:1px;border-radius:3px;padding:1px 3px;overflow:hidden;
+  cursor:pointer;border:1px solid;font-size:8.5px;line-height:1.15}
+.blk b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.blk.sel{outline:1.5px solid var(--accent);outline-offset:-1px}
+.blk.auto{border-style:dashed;background:repeating-linear-gradient(135deg,
+  rgba(124,143,166,.14) 0 4px,transparent 4px 8px);border-color:rgba(124,143,166,.4);color:#9FB0BE}
+.cover{display:flex;align-items:center;gap:8px;margin:8px 0;font-size:11px;color:var(--dim)}
+.cbar{flex:1;height:5px;border-radius:3px;background:var(--raised);overflow:hidden}
+.cbar i{display:block;height:100%;background:var(--accent-dim)}
+.bi{background:var(--panel);border:1px solid var(--soft);border-radius:6px;padding:10px;margin-top:8px}
+.bi label{display:block;font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--faint);margin:7px 0 3px}
+.bi input,.bi select{width:100%;padding:4px 6px;background:var(--bg);border:1px solid var(--line);
+  border-radius:4px;color:var(--text);font:inherit;font-size:11.5px}
+.bi .row2{display:flex;gap:5px}
+.dow{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+.dow button{padding:4px 0;border-radius:3px;font-size:10.5px;background:var(--bg);
+  border:1px solid var(--line);color:var(--faint)}
+.dow button[aria-pressed="true"]{background:var(--ghost);border-color:var(--accent-dim);
+  color:var(--accent);font-weight:600}
+.slotrow{display:flex;gap:4px;align-items:center;margin-bottom:4px}
+.warnbox{padding:7px 9px;border-radius:5px;font-size:11.5px;margin-bottom:8px;
+  background:rgba(255,194,74,.08);border:1px dashed rgba(255,194,74,.35);color:#FFD481}
 .pill{display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px}
 .pill.ok{background:rgba(91,201,140,.14);color:var(--ok)}
 .pill.bad{background:rgba(255,194,74,.14);color:var(--warn)}
@@ -108,13 +146,34 @@ tr.bad td{color:var(--warn)}
   </section>
 
   <section>
-    <h2>런다운 <span id="rdMeta" class="tag"></span></h2>
-    <div style="display:flex;gap:6px;margin-bottom:8px">
-      <button class="btn" id="addAll">전체 추가</button>
-      <button class="btn" id="clear">비우기</button>
-      <button class="btn pri" id="save">출력창에 적용</button>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+      <div class="vsw">
+        <button id="tabGrid" aria-pressed="true">주간 편성</button>
+        <button id="tabRd" aria-pressed="false">런다운</button>
+      </div>
+      <span class="tag" id="rdMeta"></span>
     </div>
-    <div id="rd"></div>
+
+    <div id="paneGrid">
+      <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+        <button class="btn" id="autoBtn">나머지 시간 자동 채움</button>
+        <button class="btn pri" id="genBtn">런다운 생성</button>
+      </div>
+      <div class="gridwrap"><div class="gdays" id="gdays"></div><div class="grid" id="grid"></div></div>
+      <div class="cover"><span id="covTxt">—</span>
+        <div class="cbar"><i id="covFill"></i></div><span class="mono" id="covPct">—</span></div>
+      <div id="blkInsp"></div>
+      <p class="note">빈 시간을 세로로 끌면 블록이 생깁니다(15분 단위). 블록을 누르면 아래에서 편집합니다.</p>
+    </div>
+
+    <div id="paneRd" hidden>
+      <div style="display:flex;gap:6px;margin-bottom:8px">
+        <button class="btn pri" id="save">출력창에 적용</button>
+        <button class="btn" id="clear">비우기</button>
+      </div>
+      <div id="genWarn" class="warnbox" hidden></div>
+      <div id="rd"></div>
+    </div>
   </section>
 
   <section>
