@@ -88,17 +88,22 @@ function mkItem(src, blockName, extra = {}) {
   };
 }
 
+// 폭주 방지 상한. 처음에 2000 으로 뒀다가 9시간을 14초 클립으로 채울 때 조용히 잘려
+// 타임라인에 2.5시간짜리 구멍이 생겼다. 상한에 걸리면 반드시 알린다 — 조용한 절단은
+// "다 채웠다"로 보이면서 실제로는 방송사고가 된다.
+const HARD_LIMIT = 50_000;
+
 /**
  * [a, z) 구간을 풀에서 채운다.
- * @returns {{items:Array, filledTo:number}}
+ * @returns {{items:Array, filledTo:number, truncated:boolean}}
  */
 function fillSlot(pool, a, z, { order, fit, seed, blockName, playlog, fillers }) {
   const out = [];
   const seq = ordered(pool, order, seed, playlog);
-  if (!seq.length) return { items: out, filledTo: a };
+  if (!seq.length) return { items: out, filledTo: a, truncated: false };
 
   let t = a, i = 0, guard = 0;
-  while (t < z && guard++ < 2000) {
+  while (t < z && guard++ < HARD_LIMIT) {
     const src = seq[i % seq.length];
     const left = z - t;
 
@@ -127,7 +132,7 @@ function fillSlot(pool, a, z, { order, fit, seed, blockName, playlog, fillers })
     break;   // loop: 남는 자투리는 그대로 둔다 (다음 블록의 Hard 마커가 정리한다)
   }
 
-  return { items: out, filledTo: t };
+  return { items: out, filledTo: t, truncated: guard >= HARD_LIMIT && t < z };
 }
 
 /* ── 런다운 생성 ──────────────────────────────────── */
@@ -162,14 +167,16 @@ export function generateRundown({ blocks, autofill, library, playlog = {}, dow, 
 
   const fillGap = (from, to) => {
     if (to - from < 1000) return;
-    if (autofill?.enabled && autoPool.length) {
-      const r = fillSlot(autoPool, from, to, {
-        order: autofill.order || 'random', fit: 'loop',
-        seed: seed++ * 7919, blockName: '자동 채움', playlog, fillers,
-      });
-      items.push(...r.items);
-    } else {
-      gaps.push({ fromMs: from, toMs: to });
+    if (!autofill?.enabled || !autoPool.length) { gaps.push({ fromMs: from, toMs: to }); return; }
+    const r = fillSlot(autoPool, from, to, {
+      order: autofill.order || 'random', fit: 'loop',
+      seed: seed++ * 7919, blockName: '자동 채움', playlog, fillers,
+    });
+    items.push(...r.items);
+    // 자동 채움이 끝까지 못 갔으면 남은 구간은 공백이다. 여기서 안 잡으면
+    // "자동 채움 켰으니 다 채워졌겠지"라는 착각이 그대로 방송에 나간다.
+    if (r.filledTo < to - 1000) {
+      gaps.push({ fromMs: r.filledTo, toMs: to, reason: r.truncated ? '상한 초과' : '소재 부족' });
     }
   };
 

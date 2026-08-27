@@ -39,20 +39,21 @@ function send(msg) { if (ws?.readyState === 1) ws.send(JSON.stringify(msg)); }
 
 function applyRundown(rd) {
   if (!rd) return;
-  const changed = JSON.stringify(rd.items?.map(i => i.id)) !== JSON.stringify(rundown.items?.map(i => i.id));
   rundown = rd;
-  engine.load(rd.items || []);
-  if (AUTO && !started && rd.items?.length) {
-    started = true;
-    gate.classList.add('gone');
-    engine.start(0);
+
+  if (started) {
+    // 롤링 윈도우는 20초마다 목록을 갈아끼운다. 재생을 끊지 않고 목록만 교체한다.
+    engine.update(rd.items || []);
+    if (!rd.items?.length) { engine.stop(); standby.classList.remove('hide'); }
     return;
   }
-  if (started && changed) {
-    // 편성이 바뀌면 처음부터 다시 — 1단계에서는 이 단순한 규칙으로 충분하다.
-    engine.stop();
-    if (rd.items?.length) engine.start(0);
-    else standby.classList.remove('hide');
+
+  engine.load(rd.items || []);
+  if (AUTO && rd.items?.length) {
+    started = true;
+    gate.classList.add('gone');
+    // 24시간 채널은 지금 나가야 할 지점부터 나간다.
+    if (rd.nowMs != null) engine.startAt(rd.nowMs); else engine.start(0);
   }
 }
 
@@ -60,7 +61,10 @@ function applyRundown(rd) {
 document.getElementById('startBtn').onclick = async () => {
   gate.classList.add('gone');
   started = true;
-  if (rundown.items?.length) await engine.start(0);
+  if (rundown.items?.length) {
+    if (rundown.nowMs != null) await engine.startAt(rundown.nowMs);
+    else await engine.start(0);
+  }
 };
 
 addEventListener('keydown', e => {

@@ -157,8 +157,9 @@ app.post('/api/rundown/generate', (req, res) => {
   const rd = { id: 'r1', dow: day, items, gaps, generatedAt: Date.now() };
   store.set('rundown', rd);
   const full = withSchedule(rd);
-  broadcast({ type: 'rundown', rundown: full });
-  res.json({ ...full, gaps, coverageMs, dowLabel: DOW[day], warning });
+  const w = pushWindow(true);
+  res.json({ ...full, gaps, coverageMs, dowLabel: DOW[day], warning,
+             windowItems: w.items.length });
 });
 
 /* ── 런다운 ──────────────────────────────────────── */
@@ -213,13 +214,55 @@ app.post('/api/rundown', (req, res) => {
   const rd = { id: req.body.id || 'r1', items: Array.isArray(req.body.items) ? req.body.items : [] };
   store.set('rundown', rd);
   const full = withSchedule(rd);
-  broadcast({ type: 'rundown', rundown: full });
+  pushWindow(true);
   res.json(full);
 });
+
+/* ── 롤링 윈도우 ─────────────────────────────────── */
+// 하루치 런다운은 서버가 통째로 들고 있되(생성 29ms, 결정적), 출력창에는 지금 필요한
+// 구간만 보낸다. 24시간 채널의 출력창에 필요한 것은 앞으로의 몇십 분뿐이고,
+// 6천 항목·2.2MB 를 매번 실어 나를 이유가 없다 (기획서 §5.4 실측).
+//
+// 슬라이스를 쓰고 구간별로 새로 생성하지 않는 이유: 블록 안의 재생 순서는 블록 시작부터
+// 누적되므로, 중간부터 생성하면 하루치로 생성했을 때와 다른 편성이 나온다.
+const WINDOW_BACK_MS = 60_000;          // 이미 지난 항목도 조금 남긴다 (재접속 대비)
+const WINDOW_AHEAD_MS = 20 * 60_000;    // 앞으로 20분
+const WINDOW_TICK_MS = 20_000;
+
+function nowMsOfDay(d = new Date()) {
+  return ((d.getHours() * 60 + d.getMinutes()) * 60 + d.getSeconds()) * 1000 + d.getMilliseconds();
+}
+
+function currentWindow() {
+  const full = withSchedule(store.get('rundown'));
+  const t = nowMsOfDay();
+  const from = t - WINDOW_BACK_MS, to = t + WINDOW_AHEAD_MS;
+  const items = full.items.filter(i => i.endMs > from && i.startMs < to);
+  return {
+    ...full, items,
+    nowMs: t, windowFrom: from, windowTo: to,
+    totalItems: full.items.length,
+  };
+}
+
+let lastWindowKey = '';
+function pushWindow(force = false) {
+  const w = currentWindow();
+  const key = w.items.map(i => i.key || i.id).join('|');
+  if (!force && key === lastWindowKey) return w;
+  lastWindowKey = key;
+  broadcast({ type: 'rundown', rundown: w });
+  return w;
+}
+setInterval(() => { if (store.get('rundown')?.items?.length) pushWindow(); }, WINDOW_TICK_MS);
+
+app.get('/api/window', (_req, res) => res.json(currentWindow()));
 
 /* ── 텔레메트리 (전환 품질 기록) ─────────────────── */
 // 2단계 완료 기준이 "검은 프레임 0" 이므로, 전환마다 실측값을 남긴다.
 const seams = [];
+const heap = [];
+app.get('/api/heap', (_req, res) => res.json(heap));
 app.get('/api/seams', (_req, res) => res.json(seams));
 app.post('/api/seams/reset', (_req, res) => { seams.length = 0; broadcast({ type: 'seams', seams }); res.json([]); });
 
@@ -237,7 +280,7 @@ wss.on('connection', ws => {
   clients.add(ws);
   ws.send(JSON.stringify({
     type: 'hello',
-    rundown: withSchedule(store.get('rundown')),
+    rundown: currentWindow(),
     library: store.get('library'),
     seams,
   }));
@@ -253,6 +296,11 @@ wss.on('connection', ws => {
       const log = store.get('playlog') || {};
       if (m.itemId) { log[m.itemId] = Date.now(); store.set('playlog', log); }
     } else if (m.type === 'state') {
+      // 장시간 운영에서 메모리가 새는지 보려면 추이를 남겨야 한다 (§9 리스크 4).
+      if (m.state?.heapMB != null) {
+        heap.push({ at: Date.now(), mb: m.state.heapMB, items: m.state.total ?? 0 });
+        if (heap.length > 2000) heap.shift();
+      }
       broadcast({ type: 'outputState', from: m.role || 'output', state: m.state });
     }
   });

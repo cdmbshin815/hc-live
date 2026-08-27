@@ -83,11 +83,42 @@ export class SeamlessEngine {
     return this;
   }
 
-  async start(index = 0) {
+  /**
+   * 재생 중에 편성 목록을 갈아끼운다 (롤링 윈도우).
+   * 목록이 20초마다 바뀐다고 매번 처음부터 다시 틀면 24시간 채널이 성립하지 않는다.
+   * 지금 나가는 항목을 key 로 다시 찾아 인덱스만 맞추고, 재생은 건드리지 않는다.
+   */
+  update(items) {
+    const curKey = this.#keyOf(this.current);
+    this.items = items || [];
+    if (curKey != null) {
+      const i = this.items.findIndex(x => this.#keyOf(x) === curKey);
+      // 현재 항목이 윈도우에서 빠졌으면 인덱스를 -1 로 둔다 — 재생은 그대로 두고
+      // 다음 전환에서 새 목록의 첫 항목으로 넘어간다.
+      this.index = i >= 0 ? i : -1;
+    }
+    this.rollFor = null;              // 다음 항목이 바뀌었을 수 있으니 프리롤을 다시 잡는다
+    this.#prepareNext();
+    return this;
+  }
+
+  /**
+   * 하루 중 지정 시각으로 합류한다.
+   * 24시간 채널은 언제 시작하든 "지금 나가야 할 지점"부터 나가야 한다.
+   */
+  async startAt(timeOfDayMs) {
+    const i = this.items.findIndex(x =>
+      x.startMs != null && x.startMs <= timeOfDayMs && timeOfDayMs < x.endMs);
+    if (i < 0) return this.start(0);
+    const offset = timeOfDayMs - this.items[i].startMs;
+    return this.start(i, offset);
+  }
+
+  async start(index = 0, offsetMs = 0) {
     if (!this.items.length) return;
     this.running = true;
     this.index = index;
-    await this.#mountInto(this.active, this.items[this.index]);
+    await this.#mountInto(this.active, this.items[this.index], offsetMs);
     this.active.style.zIndex = '2';
     this.standby.style.zIndex = '1';
     this.active.muted = false;
@@ -159,7 +190,9 @@ export class SeamlessEngine {
   }
 
   /** 요소에 항목을 물리고 첫 프레임까지 디코드시킨다. */
-  async #mountInto(el, item) {
+  #keyOf(it) { return it ? (it.key ?? it.id) : null; }
+
+  async #mountInto(el, item, offsetMs = 0) {
     if (!item) return;
     const token = ++this.seq;
     this.#detach(el);
@@ -184,7 +217,7 @@ export class SeamlessEngine {
     }
 
     if (token !== this.seq && el === this.standby) { this.#detach(el); return; }  // 그 사이 편성이 바뀜
-    const at = this.#startOf(item);
+    const at = this.#startOf(item) + (offsetMs || 0) / 1000;
     if (at > 0) {
       el.currentTime = at;
       await this.#once(el, 'seeked');                        // 이 프레임의 디코드 완료를 뜻한다
@@ -407,8 +440,12 @@ export class SeamlessEngine {
   }
 
   #emitState(status) {
+    // 장시간 운영에서 메모리가 새는지 보려면 추이가 필요하다 (§9 리스크 4).
+    const heap = performance?.memory?.usedJSHeapSize;
     this.opts.onState?.({
       status,
+      heapMB: heap ? +(heap / 1048576).toFixed(1) : null,
+      total: this.items.length,
       index: this.index,
       current: this.current ? { id: this.current.id, title: this.current.title } : null,
       next: this.next ? { id: this.next.id, title: this.next.title } : null,
