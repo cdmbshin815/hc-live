@@ -46,10 +46,18 @@ function createOutput(o = {}) {
   const w = o.width  || 1920;
   const h = o.height || 1080;
 
+  // Electron 의 크기는 논리 포인트지만 OBS 는 **물리 픽셀**을 캡처한다.
+  // Retina(scaleFactor 2)에서 1920×1080 을 그대로 주면 캡처가 3840×2160 으로 잡힌다.
+  // 의도한 해상도로 캡처되게 하려면 논리 크기를 배율로 나눠야 한다.
+  // (OBS 실측으로 확인: 논리 960×540 창 → OBS 소스 크기 1920×1080)
+  const sf = display.scaleFactor || 1;
+  const logicalW = Math.round(w / sf);
+  const logicalH = Math.round(h / sf);
+
   const win = new BrowserWindow({
     x: display.bounds.x + 40,
     y: display.bounds.y + 40,
-    width: w, height: h,
+    width: logicalW, height: logicalH,
     useContentSize: true,        // 프레임이 아니라 '내용' 픽셀을 고정 — 캡처 해상도가 정확해야 한다
     resizable: false,
     frame: false,
@@ -60,6 +68,7 @@ function createOutput(o = {}) {
   });
 
   win.setMenuBarVisibility(false);
+  console.log(`[main] 출력창 ${id} — 요청 ${w}×${h} · 배율 ${sf} · 논리 ${logicalW}×${logicalH}`);
   const ch = o.channelId ? `&ch=${encodeURIComponent(o.channelId)}` : '';
   win.loadURL(url(`/output/?id=${encodeURIComponent(id)}${ch}`));
 
