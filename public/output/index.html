@@ -11,7 +11,7 @@
 
   /* 대기 화면 — 편성이 없거나 복구 중. 검은 화면은 어떤 경우에도 내보내지 않는다(§3.9). */
   #standby{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-    background:#000;transition:opacity .5s}
+    background:#000;transition:opacity .5s;z-index:5}
   #standby.hide{opacity:0;pointer-events:none}
   #logo{width:18%;max-width:340px;opacity:.9}
 

@@ -13,6 +13,21 @@
 // requestVideoFrameCallback(정밀) 두 경로를 함께 쓴다 — #watch 주석 참조.
 
 const EPS_MS = 12;          // 반 프레임(60fps 기준) 여유
+
+// 프리롤 — 전환 직전에 대기 레이어를 아주 느린 속도로 미리 돌려 파이프라인을 깨워 둔다.
+//
+// 정지 상태의 요소에 play() 를 걸면 첫 프레임이 나오기까지 재개 지연이 붙는다(실측 약 40ms,
+// 프레임을 합쳐 73ms). z-index/opacity 를 바꿔봐도 같았으므로 합성 비용이 아니라 재생
+// 파이프라인 기동 비용이다.
+//
+// 그래서 "정지된 것을 재생시키는" 대신 "이미 재생 중인 것의 속도를 되돌리는" 방식으로 바꾼다.
+// 배속은 Chromium 의 하한인 0.0625 를 쓴다. 그 아래로 내리면 재생이 걸리지 않는다
+// (0.02 로 시도했다가 프리롤이 통째로 무산됐다 — 스킵 사유를 기록해서 잡았다).
+// 실측: 프리롤 약 270ms 에서 전환 간극이 73.5ms → 11.7ms(0.35프레임분)로 줄었다.
+// 대가로 각 클립의 앞부분 약 100ms(3프레임)를 건너뛴다 — 눈에 보이는 정지를 없애는 값으로는
+// 싸다. 앞부분을 한 프레임도 못 버리는 편성이 생기면 PREROLL_MS 를 낮춰 조절한다.
+const PREROLL_MS = 200;
+const PREROLL_RATE = 0.0625;
 const DEFAULT_LEAD = { local: 10_000, folder: 10_000, cloudflare: 20_000, bunny: 20_000, youtube: 30_000 };
 
 export class SeamlessEngine {
@@ -33,9 +48,12 @@ export class SeamlessEngine {
       v.playsInline = true;
       v.preload = 'auto';
       v.muted = true;
+      // 두 레이어를 모두 불투명하게 두고 z-index 로만 앞뒤를 바꾼다.
+      // opacity:0 으로 숨기면 합성에서 빠졌다가 다시 올라올 때 레이어 승격 비용이 붙는다.
+      // 뒤에 있는 레이어는 앞 레이어가 완전히 가리므로 보이지 않으면서도 계속 합성된다.
       Object.assign(v.style, {
         position: 'absolute', inset: '0', width: '100%', height: '100%',
-        objectFit: 'contain', background: '#000', opacity: '0',
+        objectFit: 'contain', background: '#000', zIndex: '1',
       });
       mount.appendChild(v);
       return v;
@@ -62,7 +80,8 @@ export class SeamlessEngine {
     this.running = true;
     this.index = index;
     await this.#mountInto(this.active, this.items[this.index]);
-    this.active.style.opacity = '1';
+    this.active.style.zIndex = '2';
+    this.standby.style.zIndex = '1';
     this.active.muted = false;
     await this.#safePlay(this.active);
     this.active.addEventListener('ended', this.#onEnded, { once: true });
@@ -75,11 +94,13 @@ export class SeamlessEngine {
     this.running = false;
     clearTimeout(this.endTimer);
     clearTimeout(this.preTimer);
+    clearTimeout(this.rollTimer);
+    this.rollFor = null;
     for (const v of [this.a, this.b]) {
       try { v.pause(); } catch {}
       v.removeAttribute('src');
       v.load();
-      v.style.opacity = '0';
+      v.style.zIndex = '1';
     }
     this.#emitState('stopped');
   }
@@ -114,7 +135,32 @@ export class SeamlessEngine {
       el.currentTime = at;
       await this.#once(el, 'seeked');                        // 이 프레임의 디코드 완료를 뜻한다
     }
+    el.playbackRate = 1;
     el.dataset.itemId = item.id;
+    delete el.dataset.prerolled;
+    delete el.dataset.prerollAt;
+  }
+
+  /** 전환 직전, 대기 레이어를 아주 느리게 돌려 파이프라인을 깨운다. */
+  #preroll() {
+    const el = this.standby, nxt = this.next;
+    this.prerollSkip = null;
+    if (!nxt) { this.prerollSkip = 'no-next'; return; }
+    if (el.dataset.itemId !== nxt.id) {
+      this.prerollSkip = `item-mismatch(${el.dataset.itemId || 'none'})`; return;
+    }
+    if (el.dataset.prerolled) { this.prerollSkip = 'already'; return; }
+    if (el.readyState < 2) { this.prerollSkip = `readyState=${el.readyState}`; return; }
+    el.dataset.prerolled = '1';
+    el.dataset.prerollAt = String(performance.now());
+    this.prerollFired = true;
+    el.muted = true;
+    el.playbackRate = PREROLL_RATE;
+    const p = el.play();
+    if (p && p.catch) p.catch(err => {
+      delete el.dataset.prerolled;
+      this.prerollSkip = 'play-rejected:' + (err?.name || 'unknown');
+    });
   }
 
   /** 다음 항목을 대기 레이어에 미리 실어 둔다. */
@@ -173,6 +219,17 @@ export class SeamlessEngine {
     if (leadIn <= 0) this.#prepareNext();
     else this.preTimer = setTimeout(() => this.#prepareNext(), leadIn);
 
+    // 프리롤은 항목당 한 번만 예약한다.
+    // #arm() 은 1초마다 다시 도는데, 그때마다 타이머를 다시 걸면 매번 취소되어
+    // 끝내 실행되지 않는다(첫 구현의 실제 버그였다).
+    if (this.rollFor !== item.id) {
+      this.rollFor = item.id;
+      this.prerollFired = false;
+      this.prerollSkip = null;
+      clearTimeout(this.rollTimer);
+      this.rollTimer = setTimeout(() => this.#preroll(), Math.max(0, remainMs - PREROLL_MS));
+    }
+
     // 재생이 멈추거나(버퍼링) 시각이 어긋날 수 있으므로 주기적으로 다시 계산한다.
     const wait = Math.min(remainMs, 1000);
     this.endTimer = setTimeout(() => this.#arm(), Math.max(8, wait - 4));
@@ -188,6 +245,8 @@ export class SeamlessEngine {
     this.switching = true;
     clearTimeout(this.endTimer);
     clearTimeout(this.preTimer);
+    clearTimeout(this.rollTimer);
+    this.rollFor = null;
 
     const from = this.current;
     const to = this.next;
@@ -207,13 +266,17 @@ export class SeamlessEngine {
     const oldActive = this.active;
     const newActive = this.standby;
 
-    // ① 새 레이어를 올리고 ② 옛 레이어를 내린다 — 같은 태스크, 같은 프레임.
-    newActive.style.opacity = '1';
-    oldActive.style.opacity = '0';
+    // ① 새 레이어를 앞으로, ② 옛 레이어를 뒤로 — 같은 태스크, 같은 프레임.
+    newActive.style.zIndex = '2';
+    oldActive.style.zIndex = '1';
     newActive.muted = false;
     oldActive.muted = true;
-    const p = newActive.play();
-    if (p && p.catch) p.catch(() => {});
+    // 프리롤이 걸려 있으면 이미 재생 중이므로 속도만 되돌린다(재개 지연 없음).
+    const prerolled = newActive.dataset.prerolled === '1' && !newActive.paused;
+    const prerollMs = prerolled && newActive.dataset.prerollAt
+      ? +(t0 - Number(newActive.dataset.prerollAt)).toFixed(0) : null;
+    newActive.playbackRate = 1;
+    if (!prerolled) { const p = newActive.play(); if (p && p.catch) p.catch(() => {}); }
 
     this.active = newActive;
     this.standby = oldActive;
@@ -257,6 +320,10 @@ export class SeamlessEngine {
         frameMs: +frameMs.toFixed(1),
         heldFrames: +(gap / frameMs).toFixed(2),     // 첫 프레임이 몇 프레임분 붙들렸나
         firstMediaTime: meta ? +meta.mediaTime.toFixed(3) : null,
+        prerolled,                                   // 프리롤로 파이프라인이 깨어 있었나
+        prerollMs,                                   // 프리롤이 실제로 돈 시간
+        prerollSkip: prerolled ? null
+          : (this.prerollSkip || (this.prerollFired ? 'play-not-started' : 'not-fired')),
         standbyReadyState: ready,                    // 2 이상이면 디코드된 프레임 보유 = 검은 화면 아님
         preparedMsAhead: this.standbyReadyAt ? +(t0 - this.standbyReadyAt).toFixed(0) : null,
         suspect: measuredBy === 'frame' && gap > frameMs * 2.5,
