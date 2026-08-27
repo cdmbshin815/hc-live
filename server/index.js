@@ -4,11 +4,12 @@
 import express from 'express';
 import { WebSocketServer } from 'ws';
 import { createServer } from 'node:http';
-import { readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Store } from './store.js';
-import { probe } from './probe.js';
+import * as localSource from './sources/local.js';
+import * as cloudflare from './sources/cloudflare.js';
+import * as bunny from './sources/bunny.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const MEDIA_ROOT = path.join(ROOT, 'media');
@@ -22,6 +23,8 @@ app.use(express.json({ limit: '2mb' }));
 app.use('/shared', express.static(path.join(ROOT, 'public', 'shared')));
 app.use('/output', express.static(path.join(ROOT, 'public', 'output')));
 app.use('/admin',  express.static(path.join(ROOT, 'public', 'admin')));
+// hls.js — Cloudflare Stream·Bunny Stream 재생용. 오프라인에서도 동작해야 하므로 CDN 을 쓰지 않는다.
+app.use('/vendor', express.static(path.join(ROOT, 'node_modules', 'hls.js', 'dist')));
 app.get('/', (_req, res) => res.redirect('/admin/'));
 
 /* ── 미디어 스트리밍 (Range 지원) ────────────────── */
@@ -35,53 +38,29 @@ app.get('/media/*', (req, res) => {
 });
 
 /* ── 라이브러리 ──────────────────────────────────── */
-const VIDEO_EXT = new Set(['.mp4', '.mov', '.m4v', '.mkv', '.webm']);
+// 소스 어댑터 레이어 — 출처가 달라도 편성기와 엔진은 같은 Item 만 본다 (기획서 §3.1).
+const creds = new Store(path.join(ROOT, 'data', 'credentials.json'));
 
-async function walk(dir, out = []) {
-  let entries;
-  try { entries = await readdir(dir, { withFileTypes: true }); } catch { return out; }
-  for (const e of entries) {
-    if (e.name.startsWith('.')) continue;
-    const full = path.join(dir, e.name);
-    if (e.isDirectory()) await walk(full, out);
-    else if (VIDEO_EXT.has(path.extname(e.name).toLowerCase())) out.push(full);
-  }
-  return out;
+async function scanLibrary() {
+  const prev = store.get('library');
+  const items = await localSource.scan(MEDIA_ROOT, prev.filter(i => i.isLocal));
+  // 원격 소스는 sync 로 따로 채운다 — 스캔 때마다 API 를 두드리지 않는다.
+  const remote = prev.filter(i => !i.isLocal);
+  const all = [...items, ...remote];
+  store.set('library', all);
+  return all;
 }
 
-// 파일 경로 + 크기 + mtime 이 같으면 다시 probe 하지 않는다 (스캔 비용 절감).
-async function scanLibrary() {
-  const files = await walk(MEDIA_ROOT);
-  const prev = new Map(store.get('library').map(i => [i.path, i]));
-  const items = [];
-  for (const full of files) {
-    const rel = path.relative(MEDIA_ROOT, full);
-    const st = await stat(full);
-    const cached = prev.get(rel);
-    if (cached && cached.size === st.size && cached.mtimeMs === st.mtimeMs) {
-      items.push(cached);
-      continue;
-    }
-    const meta = await probe(full);
-    items.push({
-      id: 'i_' + Buffer.from(rel).toString('base64url').slice(0, 22),
-      sourceType: 'local',
-      title: path.basename(rel, path.extname(rel)),
-      path: rel,
-      url: '/media/' + rel.split(path.sep).map(encodeURIComponent).join('/'),
-      durationMs: meta?.durationMs ?? 0,
-      width: meta?.width ?? 0,
-      height: meta?.height ?? 0,
-      fps: meta?.fps ?? 0,
-      isLocal: true,
-      status: meta?.durationMs ? 'ready' : 'error',
-      size: st.size,
-      mtimeMs: st.mtimeMs,
-    });
-  }
-  items.sort((a, b) => a.title.localeCompare(b.title, 'ko'));
-  store.set('library', items);
-  return items;
+/** 원격 소스(Cloudflare·Bunny)를 다시 읽어 라이브러리에 반영한다. */
+async function syncRemote(kind) {
+  const cfg = creds.get(kind);
+  if (!cfg) throw new Error(`${kind} 자격증명이 설정되지 않았습니다`);
+  const mod = kind === 'cloudflare' ? cloudflare : bunny;
+  const fetched = await mod.sync(cfg);
+  const keep = store.get('library').filter(i => i.sourceType !== kind);
+  const all = [...keep, ...fetched].sort((a, b) => a.title.localeCompare(b.title, 'ko'));
+  store.set('library', all);
+  return { count: fetched.length, items: all };
 }
 
 app.get('/api/library', async (_req, res) => res.json(store.get('library')));
@@ -89,6 +68,41 @@ app.post('/api/library/scan', async (_req, res) => {
   const items = await scanLibrary();
   broadcast({ type: 'library', items });
   res.json(items);
+});
+
+/* ── 원격 소스 자격증명 · 동기화 ─────────────────── */
+// 값은 data/credentials.json 에만 저장한다 (저장소에 올라가지 않음).
+// 조회할 때는 설정 여부만 돌려주고 값 자체는 절대 내보내지 않는다.
+app.get('/api/sources', (_req, res) => {
+  const mask = k => {
+    const c = creds.get(k);
+    if (!c) return { configured: false };
+    return { configured: true, hint: Object.keys(c).join(', ') };
+  };
+  res.json({ cloudflare: mask('cloudflare'), bunny: mask('bunny') });
+});
+
+app.post('/api/sources/:kind', async (req, res) => {
+  const kind = req.params.kind;
+  if (kind !== 'cloudflare' && kind !== 'bunny') return res.status(400).json({ error: '알 수 없는 소스' });
+  creds.set(kind, req.body || {});
+  const mod = kind === 'cloudflare' ? cloudflare : bunny;
+  try {
+    const v = await mod.verify(creds.get(kind));
+    res.json(v);
+  } catch (e) {
+    res.json({ ok: false, message: e.message });
+  }
+});
+
+app.post('/api/sources/:kind/sync', async (req, res) => {
+  try {
+    const { count, items } = await syncRemote(req.params.kind);
+    broadcast({ type: 'library', items });
+    res.json({ ok: true, count });
+  } catch (e) {
+    res.status(400).json({ ok: false, message: e.message });
+  }
 });
 
 /* ── 런다운 ──────────────────────────────────────── */

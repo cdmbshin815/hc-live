@@ -28,6 +28,14 @@ const EPS_MS = 12;          // 반 프레임(60fps 기준) 여유
 // 싸다. 앞부분을 한 프레임도 못 버리는 편성이 생기면 PREROLL_MS 를 낮춰 조절한다.
 const PREROLL_MS = 200;
 const PREROLL_RATE = 0.0625;
+
+// hls.js 는 HLS 소스를 처음 물릴 때만 불러온다(로컬 파일만 쓰는 채널에는 필요 없다).
+let _Hls = null;
+async function loadHls() {
+  if (!_Hls) _Hls = (await import('/vendor/hls.min.mjs')).default;
+  return _Hls;
+}
+const nativeHls = el => !!el.canPlayType('application/vnd.apple.mpegurl');
 const DEFAULT_LEAD = { local: 10_000, folder: 10_000, cloudflare: 20_000, bunny: 20_000, youtube: 30_000 };
 
 export class SeamlessEngine {
@@ -98,6 +106,7 @@ export class SeamlessEngine {
     this.rollFor = null;
     for (const v of [this.a, this.b]) {
       try { v.pause(); } catch {}
+      this.#detach(v);
       v.removeAttribute('src');
       v.load();
       v.style.zIndex = '1';
@@ -121,20 +130,66 @@ export class SeamlessEngine {
 
   #leadMs(item) { return DEFAULT_LEAD[item.sourceType] ?? DEFAULT_LEAD.local; }
 
+  /** 붙어 있던 HLS 인스턴스를 떼어낸다. 24시간 운영에서 이걸 빠뜨리면 메모리가 샌다. */
+  #detach(el) {
+    if (el._hls) { try { el._hls.destroy(); } catch {} el._hls = null; }
+  }
+
+  /**
+   * readyState 가 기준에 이를 때까지 기다린다.
+   * 전환이 안전한 조건은 "디코드된 프레임을 들고 있는가"(readyState>=2)이지
+   * "메타데이터를 읽었는가"가 아니다. 시간이 흐르면 알아서 채워지겠거니 하고
+   * 넘기면, 느린 소스에서 전환이 보류되거나 밀린다.
+   */
+  #untilReady(el, min = 2, timeoutMs = 20000) {
+    if (el.readyState >= min) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const check = () => { if (el.readyState >= min) { cleanup(); resolve(); } };
+      const fail = () => { cleanup(); reject(new Error(`준비 시간 초과 (readyState=${el.readyState})`)); };
+      const timer = setTimeout(fail, timeoutMs);
+      const iv = setInterval(check, 50);
+      const cleanup = () => {
+        clearTimeout(timer); clearInterval(iv);
+        el.removeEventListener('loadeddata', check);
+        el.removeEventListener('canplay', check);
+      };
+      el.addEventListener('loadeddata', check);
+      el.addEventListener('canplay', check);
+    });
+  }
+
   /** 요소에 항목을 물리고 첫 프레임까지 디코드시킨다. */
   async #mountInto(el, item) {
     if (!item) return;
     const token = ++this.seq;
+    this.#detach(el);
     el.muted = true;
-    el.src = item.url;
-    el.load();
-    await this.#once(el, 'loadedmetadata');
-    if (token !== this.seq && el === this.standby) return;   // 그 사이 편성이 바뀜
+
+    if (item.playbackType === 'hls' && !nativeHls(el)) {
+      // Chromium 은 HLS 를 기본 지원하지 않는다. Safari 는 src 로 바로 된다.
+      const Hls = await loadHls();
+      if (!Hls.isSupported()) throw new Error('이 환경은 HLS 를 재생할 수 없습니다');
+      const hls = new Hls({ enableWorker: true, maxBufferLength: 30, backBufferLength: 10 });
+      el._hls = hls;
+      hls.attachMedia(el);
+      hls.loadSource(item.url);
+      await new Promise((resolve, reject) => {
+        hls.once(Hls.Events.MANIFEST_PARSED, resolve);
+        hls.on(Hls.Events.ERROR, (_e, d) => { if (d?.fatal) reject(new Error('HLS: ' + d.details)); });
+      });
+    } else {
+      el.src = item.url;
+      el.load();
+      await this.#once(el, 'loadedmetadata');
+    }
+
+    if (token !== this.seq && el === this.standby) { this.#detach(el); return; }  // 그 사이 편성이 바뀜
     const at = this.#startOf(item);
-    if (at > 0 || el.currentTime !== at) {
+    if (at > 0) {
       el.currentTime = at;
       await this.#once(el, 'seeked');                        // 이 프레임의 디코드 완료를 뜻한다
     }
+    await this.#untilReady(el, 2);
     el.playbackRate = 1;
     el.dataset.itemId = item.id;
     delete el.dataset.prerolled;
@@ -284,6 +339,7 @@ export class SeamlessEngine {
 
     // 옛 레이어 정리 — 다음 프리로드에서 다시 쓴다.
     try { oldActive.pause(); } catch {}
+    this.#detach(oldActive);
     oldActive.removeAttribute('src');
     delete oldActive.dataset.itemId;
     oldActive.load();

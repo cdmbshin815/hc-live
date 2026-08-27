@@ -13,8 +13,9 @@
 - [x] 로컬 서버 (라이브러리 스캔 · Range 스트리밍 · WebSocket 브로드캐스트)
 - [x] 출력창 (프레임리스 · 로고 대기 화면 · 디버그 오버레이)
 - [x] Electron 셸 (모니터 지정 출력창 · 무인 자동 시작)
-- [x] 전환 품질 계측
-- [ ] 소스 어댑터 — Cloudflare Stream · Bunny Stream
+- [x] 전환 품질 계측 — 전환 간극 평균 11.7ms · 의심 0건
+- [x] 소스 어댑터 레이어 (로컬 · 폴더 · HLS) + HLS 재생 (hls.js)
+- [x] Cloudflare Stream · Bunny Stream 어댑터 *(실계정 미검증)*
 - [ ] 편성 화면 (목업을 실제 데이터에 연결)
 - [ ] 장시간·다채널 실측
 
@@ -22,7 +23,7 @@
 
 ```bash
 npm install
-npm run clips     # 검증용 테스트 클립 6개 생성 (ffmpeg 필요)
+npm run clips     # 검증용 클립 6개 + HLS 렌디션 3개 생성 (ffmpeg 필요)
 npm run app       # Electron 앱
 ```
 
@@ -42,6 +43,7 @@ npm run app       # Electron 앱
 ```
 electron/main.cjs        앱 셸 — 서버 기동, 관리 창·출력창 관리
 server/index.js          진실의 원천 — 라이브러리·런다운·WS 브로드캐스트
+server/sources/          소스 어댑터 — local · cloudflare · bunny
 server/probe.js          ffprobe 래퍼 (길이·해상도 실측)
 server/store.js          JSON 스토어
 public/shared/engine.js  A/B 무결절 재생 엔진 ← 이 제품의 심장
@@ -49,6 +51,15 @@ public/output/           출력창 (캡처 대상 / 모니터 직출력)
 public/admin/            1단계 검증 하네스
 tools/make-test-clips.mjs
 ```
+
+## 원격 소스 연결
+
+Cloudflare Stream · Bunny Stream 은 관리 화면의 **소스 연결**에서 자격증명을 넣고
+`동기화` 를 누르면 라이브러리에 들어온다. 값은 `data/credentials.json` 에만 저장되며
+저장소에 올라가지 않고, 서버는 설정 여부만 돌려주고 값 자체는 내보내지 않는다.
+
+두 어댑터는 공개 API 문서 기준으로 작성했고 **아직 실계정으로 검증하지 않았다.**
+자격증명이 준비되면 `동기화` 를 한 번 돌려 실제 응답과 대조해야 한다.
 
 서버가 판단하고 출력창은 재생만 한다. 미리보기와 출력창이 같은 엔진을 쓰므로
 보이는 화면이 곧 나가는 화면이다 (기획서 §5.3).

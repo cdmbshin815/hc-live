@@ -67,6 +67,28 @@ async function main() {
     console.log('완료');
   }
   console.log(`\n${CLIPS.length}개 클립 → ${OUT}`);
+
+  // HLS 렌디션 — Cloudflare Stream·Bunny Stream 과 같은 재생 경로(hls.js)를 로컬에서 검증한다.
+  // 외부 계정 없이 어댑터와 엔진의 HLS 경로를 끝까지 확인할 수 있다.
+  const HLS_OUT = path.join(ROOT, 'media', 'hls');
+  mkdirSync(HLS_OUT, { recursive: true });
+  for (const c of CLIPS.slice(0, 3)) {
+    const dir = path.join(HLS_OUT, c.name);
+    mkdirSync(dir, { recursive: true });
+    process.stdout.write(`HLS ${c.name} … `);
+    await run(ff, [
+      '-y', '-hide_banner', '-loglevel', 'error',
+      '-i', path.join(OUT, `${c.name}.mp4`),
+      '-c', 'copy',
+      '-f', 'hls',
+      '-hls_time', '4',
+      '-hls_playlist_type', 'vod',
+      '-hls_segment_filename', path.join(dir, 'seg%03d.ts'),
+      path.join(dir, 'index.m3u8'),
+    ]);
+    console.log('완료');
+  }
+  console.log(`3개 HLS → ${HLS_OUT}`);
 }
 
 main().catch(e => { console.error(e.stderr || e.message); process.exit(1); });

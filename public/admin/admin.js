@@ -41,10 +41,13 @@ function renderLib() {
       '<code>npm run clips</code> 로 검증용 클립을 만든 뒤 스캔하세요.</div>';
     return;
   }
+  const SRC = { local:'로컬', hls:'HLS', cloudflare:'CF', bunny:'Bunny', folder:'폴더' };
   el.innerHTML = library.map(i =>
     `<div class="row" data-add="${i.id}">
+       <span class="badge2">${SRC[i.sourceType] || i.sourceType}</span>
        <span class="t">${esc(i.title)}</span>
-       ${i.status === 'error' ? '<span class="err">길이 없음</span>' : ''}
+       ${i.status === 'error' ? '<span class="err">길이 없음</span>'
+         : i.status === 'resolving' ? '<span class="err" style="color:var(--warn)">준비 중</span>' : ''}
        <span class="d">${i.width}×${i.height}</span>
        <span class="d">${ms(i.durationMs)}</span>
      </div>`).join('');
@@ -111,7 +114,59 @@ function renderSeams() {
   }).join('');
 }
 
-const renderAll = () => { renderLib(); renderRd(); renderSeams(); };
+/* ── 소스 연결 (Cloudflare · Bunny) ─────────────── */
+const SOURCES = [
+  { kind: 'cloudflare', name: 'Cloudflare Stream',
+    fields: [['accountId', '계정 ID'], ['apiToken', 'API 토큰 (Stream:Read)']] },
+  { kind: 'bunny', name: 'Bunny Stream',
+    fields: [['libraryId', '라이브러리 ID'], ['apiKey', 'API 키'],
+             ['cdnHost', '재생 호스트 (예: vz-xxxx.b-cdn.net)']] },
+];
+
+async function renderSources() {
+  const state = await (await fetch('/api/sources')).json();
+  $('srcBox').innerHTML = SOURCES.map(s => `
+    <div class="src-card ${state[s.kind]?.configured ? 'on' : ''}" data-kind="${s.kind}">
+      <h3><span class="dot2"></span>${s.name}
+        <span class="tag" style="margin-left:auto">${state[s.kind]?.configured ? '설정됨' : '미설정'}</span></h3>
+      ${s.fields.map(([k, ph]) =>
+        `<input data-f="${k}" placeholder="${ph}" autocomplete="off" spellcheck="false">`).join('')}
+      <div class="acts">
+        <button class="btn" data-save>저장·확인</button>
+        <button class="btn pri" data-sync>동기화</button>
+      </div>
+      <div class="msg"></div>
+    </div>`).join('');
+
+  $('srcBox').querySelectorAll('.src-card').forEach(card => {
+    const kind = card.dataset.kind;
+    const msg = card.querySelector('.msg');
+    const values = () => Object.fromEntries(
+      [...card.querySelectorAll('[data-f]')].map(i => [i.dataset.f, i.value.trim()]).filter(([, v]) => v));
+
+    card.querySelector('[data-save]').onclick = async () => {
+      msg.textContent = '확인 중…';
+      const r = await (await fetch(`/api/sources/${kind}`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(values()),
+      })).json();
+      msg.textContent = r.ok ? '✓ ' + r.message : '✗ ' + r.message;
+      msg.style.color = r.ok ? 'var(--ok)' : 'var(--err)';
+      // 입력값은 화면에 남기지 않는다 — 저장은 서버 쪽 파일에만 이뤄진다.
+      if (r.ok) card.querySelectorAll('[data-f]').forEach(i => (i.value = ''));
+      renderSources();
+    };
+
+    card.querySelector('[data-sync]').onclick = async () => {
+      msg.textContent = '동기화 중…';
+      const r = await (await fetch(`/api/sources/${kind}/sync`, { method: 'POST' })).json();
+      msg.textContent = r.ok ? `✓ ${r.count}건 가져옴` : '✗ ' + r.message;
+      msg.style.color = r.ok ? 'var(--ok)' : 'var(--err)';
+    };
+  });
+}
+
+const renderAll = () => { renderLib(); renderRd(); renderSeams(); renderSources(); };
 
 /* ── 조작 ────────────────────────────────────────── */
 $('scan').onclick = async () => {

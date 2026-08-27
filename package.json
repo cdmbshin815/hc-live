@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "express": "^4.22.2",
+    "hls.js": "^1.7.1",
     "ws": "^8.21.3"
   },
   "devDependencies": {
