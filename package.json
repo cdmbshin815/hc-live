@@ -9,7 +9,9 @@
     "start": "node server/index.js",
     "dev": "node --watch server/index.js",
     "clips": "node tools/make-test-clips.mjs",
-    "app": "electron ."
+    "app": "electron .",
+    "clips:heavy": "node tools/make-heavy-clips.mjs",
+    "bench": "./tools/bench-run.sh"
   },
   "dependencies": {
     "express": "^4.22.2",

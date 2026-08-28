@@ -51,8 +51,16 @@ function createOutput(o = {}) {
   // 의도한 해상도로 캡처되게 하려면 논리 크기를 배율로 나눠야 한다.
   // (OBS 실측으로 확인: 논리 960×540 창 → OBS 소스 크기 1920×1080)
   const sf = display.scaleFactor || 1;
-  const logicalW = Math.round(w / sf);
-  const logicalH = Math.round(h / sf);
+  let logicalW = Math.round(w / sf);
+  let logicalH = Math.round(h / sf);
+
+  // 부하 실측용 — 창을 작게 띄워 여러 개가 화면 안에 들어오게 한다.
+  // 화면 밖으로 밀린 창은 렌더링이 억제되어 재생이 사실상 멈춘다.
+  // 디코딩은 소스 해상도로 이뤄지므로 창을 줄여도 부하는 그대로다.
+  if (process.env.LP_OUTPUT_W) {
+    logicalW = Number(process.env.LP_OUTPUT_W);
+    logicalH = Number(process.env.LP_OUTPUT_H || Math.round(logicalW * h / w));
+  }
 
   // 창을 겹치지 않게 타일로 놓는다. 겹치면 가려진 창의 렌더링이 스로틀되어
   // 프레임 콜백이 멈추고, 무엇보다 OBS 창 캡처가 흐트러진다.
@@ -75,7 +83,8 @@ function createOutput(o = {}) {
   });
 
   win.setMenuBarVisibility(false);
-  console.log(`[main] 출력창 ${id} — 요청 ${w}×${h} · 배율 ${sf} · 논리 ${logicalW}×${logicalH}`);
+  console.log(`[main] 출력창 ${id} ch=${o.channelId || '-'} — 요청 ${w}×${h} · 배율 ${sf} · ` +
+    `논리 ${logicalW}×${logicalH} @ ${x},${y}`);
   const ch = o.channelId ? `&ch=${encodeURIComponent(o.channelId)}` : '';
   win.loadURL(url(`/output/?id=${encodeURIComponent(id)}${ch}`));
 

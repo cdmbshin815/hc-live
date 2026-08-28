@@ -566,7 +566,14 @@ document.addEventListener('pointerdown', e => {
   if (tab !== 'rundown') return;
   const row = e.target.closest('#rd .row');
   if (!row || row.classList.contains('lock') || e.target.dataset.del) return;
-  rdDrag = { from: +row.dataset.i, y: e.clientY, live: false, row };
+  // 행 위치를 드래그 시작 때 한 번만 재 둔다.
+  // pointermove 마다 getBoundingClientRect() 를 전 행에 돌리면 1,000개에서
+  // 이동 한 번에 1,000번의 레이아웃 읽기가 생겨 눈에 띄게 끊긴다.
+  const rows = [...document.querySelectorAll('#rd .row')].map(el => {
+    const r = el.getBoundingClientRect();
+    return { i: +el.dataset.i, top: r.top, mid: r.top + r.height / 2, bottom: r.bottom };
+  });
+  rdDrag = { from: +row.dataset.i, y: e.clientY, live: false, row, rows };
 });
 
 document.addEventListener('pointermove', e => {
@@ -575,13 +582,12 @@ document.addEventListener('pointermove', e => {
     if (Math.abs(e.clientY - rdDrag.y) < 5) return;
     rdDrag.live = true; rdDrag.row.classList.add('drag');
   }
-  const rows = [...document.querySelectorAll('#rd .row')];
-  let idx = rows.length, top = 0;
-  for (let k = 0; k < rows.length; k++) {
-    const r = rows[k].getBoundingClientRect();
-    if (e.clientY < r.top + r.height / 2) { idx = +rows[k].dataset.i; top = r.top; break; }
-    top = r.bottom;
-  }
+  // 캐시된 위치를 이분 탐색한다 — 행이 몇 개든 이동 한 번에 log n 번만 본다.
+  const rows = rdDrag.rows;
+  let lo = 0, hi = rows.length;
+  while (lo < hi) { const m = (lo + hi) >> 1; if (e.clientY < rows[m].mid) hi = m; else lo = m + 1; }
+  const idx = lo < rows.length ? rows[lo].i : items.length;
+  const top = lo < rows.length ? rows[lo].top : (rows.at(-1)?.bottom ?? 0);
   rdDrag.to = idx;
   const box = $('rd').getBoundingClientRect();
   dline.hidden = dtip.hidden = false;
