@@ -1,0 +1,462 @@
+<title>HC LIVE 제품화 진단</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+
+<style>
+:root{
+  --bg:#FAFBFB; --surface:#FFFFFF; --sunk:#F1F4F5;
+  --line:#DFE6E8; --line-soft:#EBF0F1;
+  --text:#131A1D; --dim:#55666D; --faint:#83959C;
+  --accent:#0E7C8C; --accent-soft:#E4F2F4; --accent-line:#9CCBD3;
+  --crit:#B8362A; --crit-soft:#FBEAE8;
+  --warn:#8A6100; --warn-soft:#FCF3DF;
+  --ok:#20714A; --ok-soft:#E4F3EB;
+  --code-bg:#F4F7F8;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --sans:"IBM Plex Sans KR",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E1113; --surface:#14181B; --sunk:#191F23;
+    --line:#29333A; --line-soft:#1E262C;
+    --text:#E6EBED; --dim:#93A1A8; --faint:#64737B;
+    --accent:#4FB3C9; --accent-soft:#12242A; --accent-line:#2B6B79;
+    --crit:#FF6B5A; --crit-soft:#241413;
+    --warn:#FFC24A; --warn-soft:#241E10;
+    --ok:#5BC98C; --ok-soft:#10201A;
+    --code-bg:#0B0E10;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E1113; --surface:#14181B; --sunk:#191F23;
+  --line:#29333A; --line-soft:#1E262C;
+  --text:#E6EBED; --dim:#93A1A8; --faint:#64737B;
+  --accent:#4FB3C9; --accent-soft:#12242A; --accent-line:#2B6B79;
+  --crit:#FF6B5A; --crit-soft:#241413;
+  --warn:#FFC24A; --warn-soft:#241E10;
+  --ok:#5BC98C; --ok-soft:#10201A;
+  --code-bg:#0B0E10;
+}
+
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);
+  font-size:15px;line-height:1.75;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--accent-line)}
+a:hover{border-bottom-color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:2px}
+code{font-family:var(--mono);font-size:.86em;background:var(--code-bg);padding:.12em .38em;
+  border-radius:3px;border:1px solid var(--line-soft)}
+pre{font-family:var(--mono);font-size:12.5px;line-height:1.6;background:var(--code-bg);
+  border:1px solid var(--line);border-radius:8px;padding:13px 15px;overflow-x:auto;margin:0 0 14px}
+strong{font-weight:600}
+.wrap{max-width:920px;margin:0 auto;padding:0 24px}
+
+/* ── 머리 ─────────────────────────────────── */
+.mast{border-bottom:1px solid var(--line);background:var(--surface)}
+.mast .wrap{padding-top:50px;padding-bottom:34px}
+.eyebrow{display:flex;align-items:center;gap:11px;margin-bottom:20px;
+  font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+.eyebrow i{width:8px;height:8px;border-radius:50%;background:var(--warn);
+  box-shadow:0 0 0 4px var(--warn-soft)}
+h1{margin:0;font-size:clamp(28px,5vw,42px);font-weight:700;letter-spacing:-.02em;
+  line-height:1.14;text-wrap:balance}
+.verdict{margin:18px 0 0;font-size:17px;color:var(--dim);max-width:60ch}
+.verdict b{color:var(--text);font-weight:600}
+
+/* 준비도 요약 */
+.gauge{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:28px}
+.gauge div{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:12px 14px}
+.gauge .k{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--faint)}
+.gauge .v{font-family:var(--mono);font-size:24px;font-variant-numeric:tabular-nums;
+  margin-top:3px;letter-spacing:-.02em}
+.gauge .n{font-size:11.5px;color:var(--dim);margin-top:1px}
+.gauge .v.ok{color:var(--ok)} .gauge .v.warn{color:var(--warn)} .gauge .v.crit{color:var(--crit)}
+
+/* ── 본문 ─────────────────────────────────── */
+main{padding:44px 0 80px}
+section + section{margin-top:52px;padding-top:40px;border-top:1px solid var(--line-soft)}
+h2{margin:0 0 6px;font-size:24px;font-weight:600;letter-spacing:-.015em;line-height:1.25;
+  text-wrap:balance}
+h3{margin:30px 0 8px;font-size:16.5px;font-weight:600;letter-spacing:-.01em}
+p{margin:0 0 14px;max-width:68ch}
+ul{margin:0 0 14px;padding-left:21px;max-width:68ch}
+li{margin-bottom:5px} li::marker{color:var(--faint)}
+.sub{margin:0 0 24px;color:var(--dim);max-width:64ch}
+
+.tw{overflow-x:auto;margin:0 0 18px;border:1px solid var(--line);border-radius:8px;
+  background:var(--surface)}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{text-align:left;font-weight:600;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--faint);padding:10px 13px;border-bottom:1px solid var(--line);background:var(--sunk);
+  white-space:nowrap}
+td{padding:10px 13px;border-bottom:1px solid var(--line-soft);vertical-align:top;line-height:1.6}
+tr:last-child td{border-bottom:0}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+
+.pill{display:inline-block;font-family:var(--mono);font-size:10px;padding:2px 7px;border-radius:11px;
+  border:1px solid var(--line);color:var(--dim);white-space:nowrap;letter-spacing:.03em}
+.pill.crit{color:var(--crit);border-color:var(--crit);background:var(--crit-soft)}
+.pill.warn{color:var(--warn);border-color:var(--warn);background:var(--warn-soft)}
+.pill.ok{color:var(--ok);border-color:var(--ok);background:var(--ok-soft)}
+
+/* 구멍 카드 — 심각도가 형태로 읽혀야 한다 */
+.gap{border:1px solid var(--line);border-left:4px solid var(--warn);border-radius:0 8px 8px 0;
+  background:var(--surface);padding:16px 18px;margin:0 0 14px}
+.gap.crit{border-left-color:var(--crit)}
+.gap .hd{display:flex;align-items:baseline;gap:11px;flex-wrap:wrap;margin-bottom:8px}
+.gap .no{font-family:var(--mono);font-size:12px;color:var(--faint)}
+.gap h3{margin:0;font-size:16px;flex:1;min-width:12ch}
+.gap p{margin:0 0 10px;max-width:64ch}
+.gap p:last-child{margin-bottom:0}
+.gap .ev{font-family:var(--mono);font-size:11.5px;background:var(--code-bg);
+  border:1px solid var(--line-soft);border-radius:5px;padding:7px 10px;margin:0 0 10px;
+  color:var(--dim);overflow-x:auto;white-space:pre}
+.gap .fix{font-size:13.5px;color:var(--dim);border-top:1px dashed var(--line);padding-top:9px}
+.gap .fix b{color:var(--text)}
+
+.note{border-left:3px solid var(--accent);background:var(--accent-soft);padding:13px 16px;
+  border-radius:0 6px 6px 0;margin:0 0 18px;max-width:68ch}
+.note .lbl{display:block;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;
+  text-transform:uppercase;margin-bottom:5px;color:var(--accent)}
+.note p:last-child{margin-bottom:0}
+
+/* 단계 */
+.phase{display:grid;grid-template-columns:44px 1fr;gap:0 16px;margin:0 0 4px}
+.phase .tag{font-family:var(--mono);font-size:19px;font-weight:600;color:var(--accent);
+  line-height:1.3;padding-top:11px}
+.phase .body{border-top:1px solid var(--line);padding:12px 0 16px}
+.phase:first-of-type .body{border-top:0;padding-top:2px}
+.phase h3{margin:0 0 3px;font-size:16px}
+.phase .why{font-size:13px;color:var(--faint);margin:0 0 9px}
+.phase ul{margin:0;max-width:62ch}
+
+footer{border-top:1px solid var(--line);background:var(--surface)}
+footer .wrap{padding:24px 24px 40px;font-size:12.5px;color:var(--faint)}
+
+@media (prefers-reduced-motion:reduce){*{animation:none !important;transition:none !important}}
+@media (max-width:640px){ .phase{grid-template-columns:1fr;gap:0} .phase .tag{padding-top:14px} }
+</style>
+
+<header class="mast">
+  <div class="wrap">
+    <div class="eyebrow"><i></i><span>출시 준비도 진단</span></div>
+    <h1>HC LIVE 제품화 진단</h1>
+    <p class="verdict">
+      지금은 <b>동작하는 것</b>이지 <b>제품</b>이 아닙니다.
+      핵심 엔진은 실측으로 검증됐지만, 고객 기계에 갖다 놓으면 켜지지 않습니다.
+      팔기 전에 막아야 할 구멍이 다섯 개 있습니다.
+    </p>
+
+    <div class="gauge">
+      <div><div class="k">재생 엔진</div><div class="v ok">검증</div>
+        <div class="n">전환 11.7ms · 6채널</div></div>
+      <div><div class="k">연속 운전</div><div class="v crit">40분</div>
+        <div class="n">목표 72시간</div></div>
+      <div><div class="k">설치 패키지</div><div class="v crit">없음</div>
+        <div class="n">npm 실행만 가능</div></div>
+      <div><div class="k">소스 6종</div><div class="v warn">4종</div>
+        <div class="n">유튜브 미구현</div></div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap"><main>
+
+<!-- 1 ─────────────────────────────────────── -->
+<section>
+  <h2>지금 무엇이 되고, 무엇이 안 되나</h2>
+  <p class="sub">추정이 아니라 실제로 확인한 것만 “검증”으로 적습니다.</p>
+
+  <div class="tw"><table>
+    <tr><th>영역</th><th>상태</th><th>근거</th></tr>
+    <tr><td>무결절 재생 엔진</td><td><span class="pill ok">검증</span></td>
+      <td>전환 간극 평균 11.7ms · 의심 0건 · 파일↔HLS 혼합도 동일</td></tr>
+    <tr><td>다채널</td><td><span class="pill ok">검증</span></td>
+      <td>1080p30 15~18Mbps · 6채널까지 열화 신호 0</td></tr>
+    <tr><td>편성 파이프라인</td><td><span class="pill ok">검증</span></td>
+      <td>블록 → 자동 채움 → 런다운. 하루치 생성 29ms</td></tr>
+    <tr><td>Cloudflare · Bunny</td><td><span class="pill ok">검증</span></td>
+      <td>실계정으로 등록·동기화·재생 확인</td></tr>
+    <tr><td>편성 화면 반응성</td><td><span class="pill ok">검증</span></td>
+      <td>1,000행 드래그 이동당 0.49ms</td></tr>
+    <tr><td>연속 운전</td><td><span class="pill crit">미달</span></td>
+      <td>최장 40분. 기준은 72시간</td></tr>
+    <tr><td>모니터 직출력</td><td><span class="pill warn">미검증</span></td>
+      <td>외부 모니터가 있어야 확인 가능</td></tr>
+    <tr><td>OBS 캡처 픽셀</td><td><span class="pill warn">미검증</span></td>
+      <td>창 인식·해상도는 확인. 화면 내용은 사람이 봐야 함</td></tr>
+    <tr><td>유튜브 소스</td><td><span class="pill crit">미구현</span></td>
+      <td>6종 중 2종이 없음</td></tr>
+    <tr><td>NDI 출력</td><td><span class="pill warn">미구현</span></td>
+      <td>조건부 기능. 화면 공간이 부족해질 때</td></tr>
+  </table></div>
+</section>
+
+<!-- 2 ─────────────────────────────────────── -->
+<section>
+  <h2>팔기 전에 막아야 할 구멍</h2>
+  <p class="sub">
+    다섯 개 모두 “기능이 모자라서”가 아니라 <strong>“고객 환경에서 무너져서”</strong>입니다.
+    그래서 기능 추가보다 먼저입니다.
+  </p>
+
+  <div class="gap crit">
+    <div class="hd"><span class="no">01</span><h3>ffmpeg를 시스템에서 찾고 있습니다</h3>
+      <span class="pill crit">치명</span></div>
+    <div class="ev">server/probe.js — const { stdout } = await run('which', ['ffprobe']);</div>
+    <p>
+      고객 PC에는 ffmpeg가 없습니다. 영상 길이를 읽지 못하므로
+      <strong>라이브러리 스캔이 통째로 실패</strong>합니다. 첫 실행에서 아무것도 못 합니다.
+    </p>
+    <p>
+      번들해야 하는데 여기에 법적 문제가 붙습니다. ffmpeg 빌드에 따라 <strong>LGPL이냐 GPL이냐</strong>가
+      갈리고, GPL 빌드를 번들하면 제품 전체를 GPL로 공개해야 할 수 있습니다.
+    </p>
+    <div class="fix"><b>조치</b> — LGPL 빌드를 골라 번들하고, 소스 제공 고지와 라이선스 문구를 앱에 넣는다.
+      개발보다 컴플라이언스 확인이 더 오래 걸린다.</div>
+  </div>
+
+  <div class="gap crit">
+    <div class="hd"><span class="no">02</span><h3>24/7을 파는데 40분까지만 검증했습니다</h3>
+      <span class="pill crit">치명</span></div>
+    <p>
+      제품명이 <strong>24/7 Broadcast Automation System</strong>입니다.
+      기획서 기준은 72시간인데 최장 40분입니다. 메모리 누수가 있으면 <strong>3일째에 죽습니다</strong>.
+    </p>
+    <p>
+      방송 제품에서 이건 환불 문제가 아니라 <strong>신뢰의 문제</strong>입니다.
+      한 번 밤새 멈추면 그 고객은 다시 켜지 않습니다.
+    </p>
+    <div class="fix"><b>조치</b> — 72시간 연속 운전을 지금 걸어둔다. 결과가 나빠도 일찍 아는 편이 낫고,
+      그 사이 다른 항목을 붙일 수 있다. <b>협상 대상이 아니다.</b></div>
+  </div>
+
+  <div class="gap crit">
+    <div class="hd"><span class="no">03</span><h3>편성 데이터에 백업도 마이그레이션도 없습니다</h3>
+      <span class="pill crit">치명</span></div>
+    <div class="ev">server/store.js — schemaVersion · migrate · backup : 0곳</div>
+    <p>
+      모든 편성이 <code>data/db.json</code> 파일 하나에 들어 있습니다.
+      깨지면 고객의 편성이 <strong>전부 사라집니다</strong>.
+    </p>
+    <p>
+      스키마 버전도 없어서 다음 버전에서 구조를 바꾸면
+      <strong>기존 고객의 데이터를 읽지 못합니다</strong>. 업데이트가 곧 데이터 손실이 됩니다.
+    </p>
+    <div class="fix"><b>조치</b> — 스키마 버전 도입, 기동 시 자동 백업(세대 보관), 버전 간 마이그레이션 경로.</div>
+  </div>
+
+  <div class="gap">
+    <div class="hd"><span class="no">04</span><h3>로그가 남지 않아 지원이 불가능합니다</h3>
+      <span class="pill warn">높음</span></div>
+    <div class="ev">server/index.js — 파일 기록(writeFile · appendFile) : 0곳</div>
+    <p>
+      전환 계측과 힙 추이가 전부 메모리에 있어 <strong>프로세스가 죽으면 같이 사라집니다</strong>.
+      고객이 “어젯밤에 화면이 검게 나갔다”고 하면 확인할 방법이 없습니다.
+    </p>
+    <p>
+      역설적으로, 이 프로젝트에서 찾은 버그 대부분이 계측 덕분이었습니다.
+      그 계측이 고객 현장에서는 남지 않습니다.
+    </p>
+    <div class="fix"><b>조치</b> — 재생 이력·전환 계측·오류를 파일로 회전 기록. 고객이 한 번에 보낼 수 있는
+      진단 묶음 내보내기. 앱에 버전·빌드 표시.</div>
+  </div>
+
+  <div class="gap">
+    <div class="hd"><span class="no">05</span><h3>설치·서명·자동 업데이트가 없습니다</h3>
+      <span class="pill warn">높음</span></div>
+    <div class="ev">package.json — build 설정 없음 · devDeps: electron 뿐</div>
+    <p>
+      지금은 <code>npm install &amp;&amp; npm run app</code>입니다. 고객에게 Node.js 설치를 요구할 수 없습니다.
+      서명·공증이 없으면 macOS는 실행을 막고, Windows는 경고를 띄웁니다.
+    </p>
+    <div class="note" style="margin:0 0 10px">
+      <span class="lbl">CMS가 이미 풀어둔 문제</span>
+      <p>
+        CDMB CMS에 <code>electron-builder</code> · <code>@electron/notarize</code> ·
+        mac/win/dmg/nsis 설정 · 자동 업데이트가 모두 있습니다.
+        <strong>설정을 그대로 가져오면 됩니다.</strong> 필요한 것은 Apple Developer 계정과 인증서입니다.
+      </p>
+    </div>
+    <div class="fix"><b>조치</b> — CMS 빌드 설정 이식, 서명·공증 파이프라인, 자동 업데이트 채널.</div>
+  </div>
+</section>
+
+<!-- 3 ─────────────────────────────────────── -->
+<section>
+  <h2>약속과 실물이 다른 곳</h2>
+  <p>
+    기획서에 <strong>6종 소스</strong>라고 적혀 있지만 유튜브 어댑터가 없습니다.
+    제품 설명에 6종이라 쓸 수 없습니다. 둘 중 하나를 골라야 합니다.
+  </p>
+  <ul>
+    <li><strong>4종으로 줄여 말한다</strong> — 로컬·폴더·Cloudflare·Bunny. 정직하고 즉시 가능</li>
+    <li><strong>만든다</strong> — 다만 유튜브 임베드는 재생 품질을 통제할 수 없어
+      무결절이 최선 노력에 그칩니다. “6종 지원”이라 적고 한 종만 품질이 다르면 그것도 문제입니다</li>
+  </ul>
+  <div class="note">
+    <span class="lbl">권장</span>
+    <p>
+      1차 출시는 <strong>4종으로 정직하게</strong> 내고, 유튜브는 “아카이브 탐색용”으로 별도 표기해
+      기대치를 맞추는 편이 낫다고 봅니다. 온에어 품질이 중요한 콘텐츠는
+      Cloudflare·Bunny 미러링을 권하는 것이 이미 제품의 설계 방향이기도 합니다.
+    </p>
+  </div>
+</section>
+
+<!-- 4 ─────────────────────────────────────── -->
+<section>
+  <h2>제품 UI가 아직 검증 하네스입니다</h2>
+  <p>
+    지금 관리 화면은 3단 컬럼에 전환 계측 표가 붙은 <strong>개발자용 도구</strong>입니다.
+    목업이 보여준 제품 UI와 다릅니다. 고객이 매일 보는 화면이므로 여기가 곧 제품 인상입니다.
+  </p>
+  <div class="tw"><table>
+    <tr><th>없는 것</th><th>왜 필요한가</th></tr>
+    <tr><td><strong>운영 콘솔</strong></td>
+      <td>온에어 감시와 즉시 개입. 방송 중 손을 댈 수 있는 유일한 창구</td></tr>
+    <tr><td><strong>재생 이력</strong></td>
+      <td>무엇이 언제 나갔는지. 광고 계약이 있으면 정산 근거가 된다</td></tr>
+    <tr><td>설정 화면</td><td>지금은 소스 연결만 있다. 로고·오디오·기본값이 흩어져 있음</td></tr>
+    <tr><td>빈 상태 안내</td><td>처음 켠 사람이 무엇부터 할지 알 수 없다</td></tr>
+    <tr><td>사람이 읽는 오류</td><td>지금 오류는 개발자에게 하는 말이다</td></tr>
+  </table></div>
+</section>
+
+<!-- 5 ─────────────────────────────────────── -->
+<section>
+  <h2>시장에서의 자리</h2>
+  <p class="sub">무엇을 파는지가 정해져야 나머지 우선순위가 정해집니다.</p>
+
+  <div class="tw"><table>
+    <tr><th>대안</th><th>가격</th><th>편성 자동화</th><th>성격</th></tr>
+    <tr><td>OBS</td><td class="num">무료</td><td>없음</td><td>인코딩·송출만</td></tr>
+    <tr><td>ffplayout</td><td class="num">무료</td><td>있음</td><td>오픈소스, 리눅스·CLI 중심</td></tr>
+    <tr><td>CasparCG</td><td class="num">무료</td><td>있음</td><td>방송국용, 진입 장벽 높음</td></tr>
+    <tr><td>vMix</td><td class="num">$60~1,200</td><td>부분</td><td>스위처가 본체</td></tr>
+    <tr><td>PlayBox · Cinegy</td><td class="num">수천만원</td><td>있음</td><td>방송국 납품</td></tr>
+  </table></div>
+
+  <h3>HC LIVE의 자리</h3>
+  <p>
+    <strong>“OBS를 이미 쓰는 사람이 편성만 자동화하고 싶을 때.”</strong>
+    OBS를 대체하지 않고 <strong>공급</strong>하는 구조가 오히려 강점입니다 —
+    기존 워크플로를 바꾸지 않아도 됩니다.
+  </p>
+  <ul>
+    <li><strong>클라우드 소스를 처음부터 다룬다</strong> — 대부분의 플레이아웃 도구는 로컬 파일을 전제한다</li>
+    <li><strong>규칙 빌더가 없다</strong> — 블록 놓고 자동 채움 누르면 끝</li>
+    <li><strong>한국어 · 국내 지원</strong></li>
+  </ul>
+  <div class="note">
+    <span class="lbl">그래서 앞의 다섯 구멍이 더 중요합니다</span>
+    <p>
+      무료 대안이 존재하는 시장입니다. 여기서 돈을 받는 근거는 기능 개수가 아니라
+      <strong>“설치하면 바로 되고, 밤새 안 죽고, 문제 생기면 물어볼 곳이 있다”</strong>입니다.
+      그 셋이 정확히 ①③④⑤입니다. 구멍을 막는 일이 곧 제품을 만드는 일입니다.
+    </p>
+  </div>
+</section>
+
+<!-- 6 ─────────────────────────────────────── -->
+<section>
+  <h2>단계별 계획</h2>
+  <p class="sub">
+    작업량은 절대 기간 대신 상대 크기로 적습니다. 무엇이 크기를 좌우하는지를 함께 적었습니다.
+  </p>
+
+  <div class="phase"><div class="tag">A</div><div class="body">
+    <h3>팔 수 있는 최소</h3>
+    <p class="why">고객 환경에서 무너지지 않게 만드는 단계. 가장 지루하고 가장 중요합니다.</p>
+    <ul>
+      <li><strong>72시간 연속 운전 통과</strong> — 걸어두고 기다리는 시간이 대부분</li>
+      <li><strong>ffmpeg 번들</strong> — 개발은 작고, LGPL 확인이 크다</li>
+      <li><strong>로그 영속화 + 진단 내보내기</strong> — 중간</li>
+      <li><strong>데이터 백업 · 스키마 버전 · 마이그레이션</strong> — 중간</li>
+    </ul>
+  </div></div>
+
+  <div class="phase"><div class="tag">B</div><div class="body">
+    <h3>설치되고 갱신되는 것</h3>
+    <p class="why">CMS 자산을 재사용합니다. 계정·인증서 준비가 실제 병목입니다.</p>
+    <ul>
+      <li>electron-builder 이식, 서명 · 공증 (Apple Developer 계정 필요)</li>
+      <li>자동 업데이트 채널</li>
+      <li><strong>라이선스 활성화</strong> — 오프라인 유예 필수. 방송 기계는 망 밖에 있을 수 있다</li>
+    </ul>
+  </div></div>
+
+  <div class="phase"><div class="tag">C</div><div class="body">
+    <h3>고객이 매일 보는 화면</h3>
+    <p class="why">설계와 목업이 이미 있어 새로 정할 것은 적습니다.</p>
+    <ul>
+      <li>운영 콘솔 — 온에어 감시 · 즉시 전환 · 스킵</li>
+      <li>재생 이력 — 기록 · 조회 · 내보내기</li>
+      <li>설정 화면 정리, 빈 상태 안내, 오류 문구 다시 쓰기</li>
+    </ul>
+  </div></div>
+
+  <div class="phase"><div class="tag">D</div><div class="body">
+    <h3>약속한 것 채우기</h3>
+    <p class="why">사람·하드웨어가 있어야 끝나는 항목이 섞여 있습니다.</p>
+    <ul>
+      <li>모니터 직출력 실검증 <span class="pill">외부 모니터 필요</span></li>
+      <li>OBS 캡처 픽셀 확인 <span class="pill">사람이 미리보기 확인</span></li>
+      <li>유튜브 어댑터 — 또는 “4종”으로 문구 확정</li>
+    </ul>
+  </div></div>
+
+  <div class="phase"><div class="tag">E</div><div class="body">
+    <h3>차별화</h3>
+    <p class="why">1차 출시 이후. 없어도 팔 수 있는 것들입니다.</p>
+    <ul>
+      <li>NDI 출력 — 화면 공간이 부족해질 때</li>
+      <li>OBS · vMix 연동 (씬 자동 전환) — obs-websocket 연결은 이미 확인됨</li>
+      <li>자체 전송 스택 — 필요해질 때. 검토는 기획서 부록 C에 있음</li>
+    </ul>
+  </div></div>
+</section>
+
+<!-- 7 ─────────────────────────────────────── -->
+<section>
+  <h2>먼저 정해야 할 사업 결정</h2>
+  <p class="sub">기술 판단이 아니라 사업 판단이라 제가 정할 수 없는 것들입니다.</p>
+  <div class="tw"><table>
+    <tr><th>질문</th><th>왜 지금 정해야 하나</th></tr>
+    <tr><td><strong>누구에게 파는가</strong></td>
+      <td>교회 미디어팀 · 1인 채널 운영자 · 행사 업체는 필요한 기능이 다르다.
+        운영 콘솔의 복잡도가 여기서 갈린다</td></tr>
+    <tr><td><strong>가격 모델</strong></td>
+      <td>영구 라이선스인지 구독인지에 따라 자동 업데이트·활성화 구조가 달라진다</td></tr>
+    <tr><td><strong>과금 단위</strong></td>
+      <td>기기당인지 채널당인지. 채널당이면 채널 수 제한을 앱이 강제해야 한다</td></tr>
+    <tr><td><strong>지원 범위</strong></td>
+      <td>원격 지원을 약속하면 진단·로그 요구 수준이 크게 올라간다</td></tr>
+    <tr><td><strong>4K 정책</strong></td>
+      <td>현재 보류. “1080p 전용”을 제품 사양에 명시할지 결정해야 한다</td></tr>
+  </table></div>
+</section>
+
+<!-- 8 ─────────────────────────────────────── -->
+<section>
+  <h2>제안</h2>
+  <p>
+    <strong>72시간 연속 운전을 지금 겁니다.</strong> 3일 뒤에 답이 나오고,
+    그 사이 ffmpeg 번들 · 로그 영속화 · 데이터 백업을 붙일 수 있습니다.
+    결과가 나빠도 일찍 아는 것이 낫습니다 — 출시 직전에 알면 일정 전체가 흔들립니다.
+  </p>
+  <p>
+    기능을 더 만들고 싶은 유혹이 크겠지만, 방송 제품에서 팔리는 것은 기능이 아니라
+    <strong>밤새 안 죽는다는 믿음</strong>입니다.
+  </p>
+</section>
+
+</main></div>
+
+<footer><div class="wrap">
+  HC LIVE · 24/7 Broadcast Automation System · 제품화 진단 v1 (2026-08-28)<br>
+  근거가 되는 실측값과 결정 기록은 <code>docs/기획서.md</code>,
+  운영 절차는 <code>docs/사용자설명서.html</code>에 있습니다.
+</div></footer>

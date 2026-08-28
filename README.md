@@ -6,6 +6,7 @@
 그 결과를 **OBS·vMix** 또는 **모니터**로 내보낸다.
 
 **[관리자 설명서](docs/사용자설명서.html)** — 설치·설정·운영·기술 자료
+**[제품화 진단](docs/제품화진단.html)** — 판매 제품이 되기까지 남은 것
 기획서: [docs/기획서.md](docs/기획서.md) · UI 목업: [docs/mockups/편성화면.html](docs/mockups/편성화면.html)
 
 ## 현재 상태 — 2단계(MVP) 진행 중
