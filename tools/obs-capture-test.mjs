@@ -9,7 +9,7 @@ const cfg = JSON.parse(readFileSync(process.env.HOME +
 const obs = new OBSWebSocket();
 await obs.connect(`ws://127.0.0.1:${cfg.server_port}`, cfg.server_password);
 
-const SCENE = 'LP-캡처검증', SRC = 'LP-출력창';
+const SCENE = 'HC-캡처검증', SRC = 'HC-출력창';
 const scenes = (await obs.call('GetSceneList')).scenes.map(s => s.sceneName);
 if (!scenes.includes(SCENE)) await obs.call('CreateScene', { sceneName: SCENE });
 
@@ -24,7 +24,7 @@ if (!inputs.includes(SRC)) {
 const items = (await obs.call('GetInputPropertiesListPropertyItems',
   { inputName: SRC, propertyName: 'window' })).propertyItems;
 const hit = items.filter(w => /Live ?Player|출력/i.test(w.itemName));
-console.log(`창 ${items.length}개 · Live Player 관련 ${hit.length}개`);
+console.log(`창 ${items.length}개 · HC Live 관련 ${hit.length}개`);
 hit.forEach(w => console.log('   ', w.itemName, '→', w.itemValue));
 if (!hit.length) {
   console.log('후보 일부:', items.slice(0, 10).map(w => w.itemName).join(' | '));
@@ -51,4 +51,4 @@ writeFileSync('/tmp/obs-result.json', JSON.stringify({
   window: hit[0].itemName, sourceW: tr.sourceWidth, sourceH: tr.sourceHeight,
   pngW: buf.readUInt32BE(16), pngH: buf.readUInt32BE(20), bytes: buf.length }, null, 2));
 await obs.disconnect();
-console.log('완료 — 씬 "LP-캡처검증" 은 남겨둡니다 (직접 확인용)');
+console.log('완료 — 씬 "HC-캡처검증" 은 남겨둡니다 (직접 확인용)');

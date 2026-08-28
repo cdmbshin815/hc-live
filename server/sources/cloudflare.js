@@ -3,7 +3,7 @@
 // 필요한 자격증명 (설정 화면에서 입력, data/credentials.json 에 저장 — 저장소에 올라가지 않음)
 //   accountId : Cloudflare 계정 ID
 //   apiToken  : Stream:Read 권한이 있는 API 토큰
-//   creator   : 이 크리에이터의 영상만 가져온다. Live Player 는 hcjoynLive 를 쓴다.
+//   creator   : 이 크리에이터의 영상만 가져온다. HC Live 는 hcjoynLive 를 쓴다.
 //   customerSubdomain : (선택) 재생 도메인. 예: customer-xxxxxxxx
 //
 // 실계정으로 검증했다 (2026-08-28, 계정 98ba71…). 필드 매핑은 실제 응답과 일치한다.

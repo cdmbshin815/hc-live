@@ -1,4 +1,4 @@
-// Live Player 로컬 서버 — 진실의 원천.
+// HC Live 로컬 서버 — 진실의 원천.
 // 라이브러리·런다운을 보관하고, 출력창에 WebSocket 으로 지시를 브로드캐스트한다.
 // 출력창은 판단하지 않고 지시받은 것을 재생한다 (기획서 §5.3).
 import express from 'express';
@@ -502,7 +502,7 @@ export async function startServer(portBase = PORT_BASE, tries = 12) {
     server.listen(port, '127.0.0.1');
   });
 
-  console.log(`\n  Live Player  http://127.0.0.1:${port}`);
+  console.log(`\n  HC Live  http://127.0.0.1:${port}`);
   console.log(`  관리        http://127.0.0.1:${port}/admin/`);
   console.log(`  출력창      http://127.0.0.1:${port}/output/\n`);
   const items = await scanLibrary();

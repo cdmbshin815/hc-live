@@ -1,4 +1,4 @@
-# Live Player 문서
+# HC Live 문서
 
 기획·설계 문서 모음입니다.
 

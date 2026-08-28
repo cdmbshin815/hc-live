@@ -10,7 +10,7 @@ for n in ${(s:,:)${BENCH_N:-1,2,4,6}}; do
   pkill -f "Electron.app/Contents/MacOS/Electron \." 2>/dev/null
   sleep 3
   list=$(printf "%s," "${IDS[@]:0:$n}" | sed 's/,$//')
-  LP_AUTO_OUTPUT="$list" LP_OUTPUT_W=${LP_OUTPUT_W:-460} npm run app > /tmp/bench-$n.log 2>&1 &
+  HC_AUTO_OUTPUT="$list" HC_OUTPUT_W=${HC_OUTPUT_W:-460} npm run app > /tmp/bench-$n.log 2>&1 &
   # 서버 기동 대기
   for i in {1..40}; do curl -s -o /dev/null http://127.0.0.1:4200/api/channels && break; sleep 2; done
   sleep 12                                    # 창이 뜨고 재생이 안정될 시간

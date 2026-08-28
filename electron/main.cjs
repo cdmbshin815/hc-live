@@ -26,7 +26,7 @@ function createAdmin() {
   adminWin = new BrowserWindow({
     width: 1440, height: 860, minWidth: 1080,
     backgroundColor: '#0E1113',
-    title: 'Live Player',
+    title: 'HC Live',
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true },
   });
   adminWin.loadURL(url('/admin/'));
@@ -57,9 +57,9 @@ function createOutput(o = {}) {
   // 부하 실측용 — 창을 작게 띄워 여러 개가 화면 안에 들어오게 한다.
   // 화면 밖으로 밀린 창은 렌더링이 억제되어 재생이 사실상 멈춘다.
   // 디코딩은 소스 해상도로 이뤄지므로 창을 줄여도 부하는 그대로다.
-  if (process.env.LP_OUTPUT_W) {
-    logicalW = Number(process.env.LP_OUTPUT_W);
-    logicalH = Number(process.env.LP_OUTPUT_H || Math.round(logicalW * h / w));
+  if (process.env.HC_OUTPUT_W) {
+    logicalW = Number(process.env.HC_OUTPUT_W);
+    logicalH = Number(process.env.HC_OUTPUT_H || Math.round(logicalW * h / w));
   }
 
   // 창을 겹치지 않게 타일로 놓는다. 겹치면 가려진 창의 렌더링이 스로틀되어
@@ -78,7 +78,7 @@ function createOutput(o = {}) {
     frame: false,
     fullscreenable: true,
     backgroundColor: '#000000',
-    title: `Live Player — 출력 ${id}`,
+    title: `HC Live — 출력 ${id}`,
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true },
   });
 
@@ -99,7 +99,7 @@ function createOutput(o = {}) {
 }
 
 /* ── IPC ─────────────────────────────────────────── */
-ipcMain.handle('lp:displays', () => screen.getAllDisplays().map((d, i) => ({
+ipcMain.handle('hc:displays', () => screen.getAllDisplays().map((d, i) => ({
   id: d.id,
   index: i + 1,
   label: d.label || `디스플레이 ${i + 1}`,
@@ -111,13 +111,13 @@ ipcMain.handle('lp:displays', () => screen.getAllDisplays().map((d, i) => ({
   primary: d.id === screen.getPrimaryDisplay().id,
 })));
 
-ipcMain.handle('lp:openOutput', (_e, o) => createOutput(o));
-ipcMain.handle('lp:closeOutput', (_e, id) => {
+ipcMain.handle('hc:openOutput', (_e, o) => createOutput(o));
+ipcMain.handle('hc:closeOutput', (_e, id) => {
   const w = outputs.get(id);
   if (w) w.close();
   return true;
 });
-ipcMain.handle('lp:port', () => port);
+ipcMain.handle('hc:port', () => port);
 
 /* ── 기동 ────────────────────────────────────────── */
 app.whenReady().then(async () => {
@@ -128,15 +128,15 @@ app.whenReady().then(async () => {
   } catch (e) {
     // 서버가 안 뜨면 창을 열어봐야 아무것도 못 한다. 조용히 넘어가면
     // "앱은 떠 있는데 방송은 안 나가는" 최악의 상태가 된다.
-    dialog.showErrorBox('Live Player — 기동 실패',
+    dialog.showErrorBox('HC Live — 기동 실패',
       `로컬 서버를 시작하지 못했습니다.\n\n${e.message}`);
     app.quit();
     return;
   }
   createAdmin();
-  if (process.env.LP_AUTO_OUTPUT) {
-    // LP_AUTO_OUTPUT=c1,c2 처럼 채널을 지정하면 채널마다 출력창을 연다.
-    const chans = String(process.env.LP_AUTO_OUTPUT).split(',').map(x => x.trim()).filter(Boolean);
+  if (process.env.HC_AUTO_OUTPUT) {
+    // HC_AUTO_OUTPUT=c1,c2 처럼 채널을 지정하면 채널마다 출력창을 연다.
+    const chans = String(process.env.HC_AUTO_OUTPUT).split(',').map(x => x.trim()).filter(Boolean);
     const list = chans.length && chans[0] !== '1' ? chans : ['c1'];
     list.forEach((cid, i) => createOutput({
       id: 'out' + (i + 1), channelId: cid, width: 960, height: 540,

@@ -10,7 +10,7 @@ const ms = m => {
 
 let library = [], items = [], seams = [], ws;
 let blocks = [], autofill = { enabled:false, poolIds:[], order:'random' }, pools = [], coverage = null;
-let chans = [], curCh = localStorage.getItem('lp.ch') || '';
+let chans = [], curCh = localStorage.getItem('hc.ch') || '';
 const chUrl = p => `/api/channels/${encodeURIComponent(curCh)}${p}`;
 let selBlk = null, tab = 'grid';
 
@@ -144,7 +144,7 @@ function renderSeams() {
 const SOURCES = [
   { kind: 'cloudflare', name: 'Cloudflare Stream',
     fields: [['accountId', '계정 ID'], ['apiToken', 'API 토큰 (Stream:Read)'],
-             ['creator', 'creator — Live Player 는 hcjoynLive'],
+             ['creator', 'creator — HC Live 는 hcjoynLive'],
              ['customerSubdomain', '재생 도메인 (선택 · customer-xxxx)']] },
   { kind: 'bunny', name: 'Bunny Stream',
     fields: [['libraryId', '라이브러리 ID'], ['apiKey', 'API 키'],
@@ -198,7 +198,7 @@ async function renderSources() {
 async function loadChannels() {
   chans = await (await fetch('/api/channels')).json();
   if (!chans.find(c => c.id === curCh)) curCh = chans[0]?.id || '';
-  localStorage.setItem('lp.ch', curCh);
+  localStorage.setItem('hc.ch', curCh);
   $('chSel').innerHTML = chans.map(c =>
     `<option value="${c.id}" ${c.id===curCh?'selected':''}>${esc(c.name)} · ${c.blockCount}블록 · ` +
     `${c.rundownItems}항목</option>`).join('');
@@ -388,7 +388,7 @@ const scaleNote = m => ({
 
 async function loadOutputs() {
   outs = await (await fetch('/api/outputs')).json();
-  if (inElectron && !displays.length) displays = await window.lp.displays();
+  if (inElectron && !displays.length) displays = await window.hc.displays();
   renderOutputs();
 }
 
@@ -625,7 +625,7 @@ const renderAll = async () => {
 };
 
 $('chSel').onchange = async e => {
-  curCh = e.target.value; localStorage.setItem('lp.ch', curCh);
+  curCh = e.target.value; localStorage.setItem('hc.ch', curCh);
   selBlk = null; items = [];
   await loadChannels(); await loadBlocks(); renderRd();
 };
@@ -636,7 +636,7 @@ $('chAdd').onclick = async () => {
     method:'POST', headers:{'content-type':'application/json'},
     body: JSON.stringify({ name }),
   })).json();
-  curCh = r.id; localStorage.setItem('lp.ch', curCh);
+  curCh = r.id; localStorage.setItem('hc.ch', curCh);
   selBlk = null; items = [];
   await loadChannels(); await loadBlocks(); renderRd();
 };
@@ -659,12 +659,12 @@ $('save').onclick = async () => {
   setTimeout(() => ($('save').textContent = '출력창에 적용'), 1200);
 };
 /* ── 출력창 (Electron 이면 실제 창, 아니면 브라우저 탭) ── */
-const inElectron = !!window.lp?.isElectron;
+const inElectron = !!window.hc?.isElectron;
 
 $('open').onclick = async () => {
-  if (!inElectron) { window.open('/output/', 'lp-output', 'width=960,height=560'); return; }
+  if (!inElectron) { window.open('/output/', 'hc-output', 'width=960,height=560'); return; }
   const sel = $('display');
-  await window.lp.openOutput({
+  await window.hc.openOutput({
     id: 'out_' + curCh,
     channelId: curCh,
     displayId: sel?.value ? Number(sel.value) : undefined,
@@ -675,7 +675,7 @@ $('open').onclick = async () => {
 async function initElectron() {
   if (!inElectron) { $('elBar').hidden = true; return; }
   $('elBar').hidden = false;
-  const ds = await window.lp.displays();
+  const ds = await window.hc.displays();
   $('display').innerHTML = ds.map(d =>
     `<option value="${d.id}">${d.index}. ${esc(d.label)} — ${d.width}×${d.height}` +
     `${d.primary ? ' (주)' : ''}</option>`).join('');
