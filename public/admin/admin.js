@@ -88,7 +88,10 @@ function renderRd() {
     const mk = i.timing && i.timing !== 'none'
       ? `<span class="badge2" style="color:#FF8478">${i.timing.toUpperCase()}</span>` : '';
     const len = (i.trimOutMs ?? i.durationMs) - (i.trimInMs ?? 0);
-    return `<div class="row">
+    // 온에어 항목과 다음 1개는 드래그를 막는다 — 실수로 방송을 끊는 사고를 방지 (§4.3.7)
+    const locked = n <= onAirIndex() + 1 && onAirIndex() >= 0;
+    return `<div class="row ${locked ? 'lock' : ''}" data-i="${n}">
+      <span class="grip">${locked ? '🔒' : '⣿'}</span>
       <span class="n">${n + 1}</span>
       <span class="d">${i.startMs != null ? ms(i.startMs) : ms(at)}</span>
       <span class="t">${esc(i.title)}</span>
@@ -542,6 +545,73 @@ $('genBtn').onclick = async () => {
   if (r.warning) $('genWarn').textContent = '⚠ ' + r.warning;
   setTab('rundown'); renderRd();
 };
+
+/* ── 런다운 드래그 재정렬 (§4.3.4) ───────────────── */
+// 지금 나가는 지점을 안다는 전제로 온에어·다음 항목을 잠근다.
+function nowMsOfDay() {
+  const d = new Date();
+  return ((d.getHours() * 60 + d.getMinutes()) * 60 + d.getSeconds()) * 1000;
+}
+function onAirIndex() {
+  const t = nowMsOfDay();
+  return items.findIndex(i => i.startMs != null && i.startMs <= t && t < i.endMs);
+}
+
+const dline = document.createElement('div'); dline.className = 'drop-line'; dline.hidden = true;
+const dtip  = document.createElement('div'); dtip.className  = 'drop-tip';  dtip.hidden  = true;
+document.body.append(dline, dtip);
+let rdDrag = null;
+
+document.addEventListener('pointerdown', e => {
+  if (tab !== 'rundown') return;
+  const row = e.target.closest('#rd .row');
+  if (!row || row.classList.contains('lock') || e.target.dataset.del) return;
+  rdDrag = { from: +row.dataset.i, y: e.clientY, live: false, row };
+});
+
+document.addEventListener('pointermove', e => {
+  if (!rdDrag) return;
+  if (!rdDrag.live) {
+    if (Math.abs(e.clientY - rdDrag.y) < 5) return;
+    rdDrag.live = true; rdDrag.row.classList.add('drag');
+  }
+  const rows = [...document.querySelectorAll('#rd .row')];
+  let idx = rows.length, top = 0;
+  for (let k = 0; k < rows.length; k++) {
+    const r = rows[k].getBoundingClientRect();
+    if (e.clientY < r.top + r.height / 2) { idx = +rows[k].dataset.i; top = r.top; break; }
+    top = r.bottom;
+  }
+  rdDrag.to = idx;
+  const box = $('rd').getBoundingClientRect();
+  dline.hidden = dtip.hidden = false;
+  dline.style.left = box.left + 'px'; dline.style.width = box.width + 'px'; dline.style.top = top + 'px';
+  // 놓았을 때 그 자리의 예상 시작 시각 — 자기 행동의 결과를 보여주는 유일한 피드백이다
+  const at = items[Math.min(idx, items.length - 1)]?.startMs ?? 0;
+  dtip.textContent = ms(at);
+  dtip.style.left = (box.right - 70) + 'px'; dtip.style.top = top + 'px';
+});
+
+document.addEventListener('pointerup', async () => {
+  if (!rdDrag) return;
+  const d = rdDrag; rdDrag = null;
+  dline.hidden = dtip.hidden = true;
+  d.row.classList.remove('drag');
+  if (!d.live || d.to == null) return;
+  let to = d.to; if (to > d.from) to--;
+  if (to === d.from) return;
+  items.splice(to, 0, items.splice(d.from, 1)[0]);
+  renderRd();                                   // 즉시 반영
+  const r = await (await fetch(chUrl('/rundown'), {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ items }),
+  })).json();
+  items = r.items;                              // 서버가 다시 계산한 시작 시각으로 갱신
+  renderRd();
+  document.querySelectorAll('#rd .row .d').forEach(el => {
+    el.animate([{ color: 'var(--accent)' }, { color: '' }], { duration: 550 });
+  });
+});
 
 const renderAll = async () => {
   await loadChannels();

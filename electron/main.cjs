@@ -5,7 +5,7 @@
 //   · 프레임리스, 지정 해상도로 픽셀 고정, 크기 변경 불가
 //   · 메뉴·커서·툴팁 없음, 배경은 순수 검정
 //   · 지정 모니터로 이동, 필요 시 전체화면
-const { app, BrowserWindow, screen, ipcMain, Menu } = require('electron');
+const { app, BrowserWindow, screen, ipcMain, Menu, dialog } = require('electron');
 const path = require('path');
 
 // 사이니지·방송 앱은 일시적 오류로 죽으면 안 된다. 로그를 남기고 계속한다.
@@ -54,9 +54,16 @@ function createOutput(o = {}) {
   const logicalW = Math.round(w / sf);
   const logicalH = Math.round(h / sf);
 
+  // 창을 겹치지 않게 타일로 놓는다. 겹치면 가려진 창의 렌더링이 스로틀되어
+  // 프레임 콜백이 멈추고, 무엇보다 OBS 창 캡처가 흐트러진다.
+  const n = outputs.size;
+  const cols = Math.max(1, Math.floor(display.workArea.width / (logicalW + 16)));
+  const col = n % cols, row = Math.floor(n / cols);
+  const x = display.workArea.x + col * (logicalW + 16);
+  const y = display.workArea.y + row * (logicalH + 40);
+
   const win = new BrowserWindow({
-    x: display.bounds.x + 40,
-    y: display.bounds.y + 40,
+    x, y,
     width: logicalW, height: logicalH,
     useContentSize: true,        // 프레임이 아니라 '내용' 픽셀을 고정 — 캡처 해상도가 정확해야 한다
     resizable: false,
@@ -106,8 +113,17 @@ ipcMain.handle('lp:port', () => port);
 /* ── 기동 ────────────────────────────────────────── */
 app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
-  const { startServer } = await import('../server/index.js');
-  port = await startServer();
+  try {
+    const { startServer } = await import('../server/index.js');
+    port = await startServer();
+  } catch (e) {
+    // 서버가 안 뜨면 창을 열어봐야 아무것도 못 한다. 조용히 넘어가면
+    // "앱은 떠 있는데 방송은 안 나가는" 최악의 상태가 된다.
+    dialog.showErrorBox('Live Player — 기동 실패',
+      `로컬 서버를 시작하지 못했습니다.\n\n${e.message}`);
+    app.quit();
+    return;
+  }
   createAdmin();
   if (process.env.LP_AUTO_OUTPUT) {
     // LP_AUTO_OUTPUT=c1,c2 처럼 채널을 지정하면 채널마다 출력창을 연다.

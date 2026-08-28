@@ -340,6 +340,10 @@ export class SeamlessEngine {
     const to = this.next;
     const t0 = performance.now();
     const ready = this.standby.readyState;
+    // 지금 전환에 쓰이는 레이어가 '언제 준비됐는지'를 여기서 붙잡아 둔다.
+    // 아래에서 #prepareNext() 가 다음 항목을 준비하며 standbyReadyAt 을 덮어쓰므로,
+    // 보고 시점에 읽으면 다음 항목의 값이 잡힌다 (실제로 항상 -20ms 가 나왔다).
+    const readyAt = this.standbyReadyAt;
 
     // 대기 레이어가 준비되지 않았다면 전환하지 않는다.
     // 화면이 끊기느니 현재 항목을 조금 더 재생하는 편이 낫다.
@@ -414,7 +418,9 @@ export class SeamlessEngine {
         prerollSkip: prerolled ? null
           : (this.prerollSkip || (this.prerollFired ? 'play-not-started' : 'not-fired')),
         standbyReadyState: ready,                    // 2 이상이면 디코드된 프레임 보유 = 검은 화면 아님
-        preparedMsAhead: this.standbyReadyAt ? +(t0 - this.standbyReadyAt).toFixed(0) : null,
+        // 다음 항목이 전환보다 얼마나 미리 준비됐나 = 여유(headroom).
+        // 디코더가 부족해지면 이 값이 먼저 줄어든다.
+        preparedMsAhead: readyAt ? +(t0 - readyAt).toFixed(0) : null,
         suspect: measuredBy === 'frame' && gap > frameMs * 2.5,
       });
     };

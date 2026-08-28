@@ -4,6 +4,7 @@
 import express from 'express';
 import { WebSocketServer } from 'ws';
 import { createServer } from 'node:http';
+import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Store, newChannel } from './store.js';
@@ -463,31 +464,51 @@ wss.on('connection', (ws, req) => {
 
 /* ── 기동 (포트 사용 중이면 다음 포트로) ─────────── */
 // Electron 메인 프로세스에서도 불러 쓰므로, 실제 사용한 포트를 돌려준다.
-export function startServer(portBase = PORT_BASE) {
-  return new Promise((resolve, reject) => {
-    let tries = 12;
-    const onError = err => {
-      if (err.code === 'EADDRINUSE' && tries-- > 0) {
-        console.log(`[server] 포트 ${portBase} 사용 중 → ${portBase + 1} 시도`);
-        portBase += 1;
-        server.listen(portBase, '127.0.0.1');
-      } else {
-        server.off('error', onError);
-        reject(err);
-      }
-    };
-    server.on('error', onError);
-    server.listen(portBase, '127.0.0.1', async () => {
-      server.off('error', onError);
-      console.log(`\n  Live Player  http://127.0.0.1:${portBase}`);
-      console.log(`  관리        http://127.0.0.1:${portBase}/admin/`);
-      console.log(`  출력창      http://127.0.0.1:${portBase}/output/\n`);
-      const items = await scanLibrary();
-      console.log(`  라이브러리 ${items.length}개 스캔 완료`);
-      broadcast({ type: 'library', items });
-      resolve(portBase);
-    });
+/**
+ * 비어 있는 포트를 찾는다.
+ *
+ * listen() 의 실패에 기대지 않는 이유: Node 는 이 경로에서 EADDRINUSE 를
+ * **비동기 콜백 안에서 동기 throw** 한다. 그래서 server.on('error') 로도,
+ * Promise executor 의 try/catch 로도 잡히지 않고 uncaughtException 으로 튄다.
+ * 실제로 Electron 이 이 때문에 창을 하나도 못 열고 로그 한 줄만 남긴 적이 있다.
+ *
+ * 대신 접속을 시도해 본다 — 연결되면 누가 듣고 있는 것이고, 거절되면 비어 있다.
+ */
+function portInUse(port, host = '127.0.0.1') {
+  return new Promise(resolve => {
+    const sock = net.connect({ port, host });
+    const done = v => { sock.destroy(); resolve(v); };
+    sock.setTimeout(500);
+    sock.once('connect', () => done(true));
+    sock.once('error', () => done(false));
+    sock.once('timeout', () => done(false));
   });
+}
+
+export async function startServer(portBase = PORT_BASE, tries = 12) {
+  let port = portBase;
+  for (let i = 0; i < tries; i++) {
+    if (!(await portInUse(port))) break;
+    console.log(`[server] 포트 ${port} 사용 중 → ${port + 1} 시도`);
+    port += 1;
+    if (i === tries - 1) throw new Error(`빈 포트를 찾지 못했습니다 (${portBase}~${port})`);
+  }
+
+  await new Promise((resolve, reject) => {
+    const onError = err => { server.off('listening', onListening); reject(err); };
+    const onListening = () => { server.off('error', onError); resolve(); };
+    server.once('error', onError);
+    server.once('listening', onListening);
+    server.listen(port, '127.0.0.1');
+  });
+
+  console.log(`\n  Live Player  http://127.0.0.1:${port}`);
+  console.log(`  관리        http://127.0.0.1:${port}/admin/`);
+  console.log(`  출력창      http://127.0.0.1:${port}/output/\n`);
+  const items = await scanLibrary();
+  console.log(`  라이브러리 ${items.length}개 스캔 완료`);
+  broadcast({ type: 'library', items });
+  return port;
 }
 
 // 직접 실행했을 때만 스스로 기동한다 (Electron 은 startServer 를 직접 부른다).
