@@ -344,6 +344,30 @@ app.get('/api/channels/:id/rundown', (req, res) => {
   res.json(withSchedule(c.rundown || { items: [] }));
 });
 
+/**
+ * 항목 하나를 옮긴다.
+ *
+ * 재정렬 때마다 하루치 전체를 올리면 안 된다 — 7,680 항목이면 2.2MB 라
+ * 본문 한계를 넘어 413 이 나고, 화면만 바뀐 채 서버에는 반영되지 않는다.
+ * 옮긴 사실만 보내고 계산은 서버가 한다.
+ */
+app.post('/api/channels/:id/rundown/move', (req, res) => {
+  const list = channels();
+  const c = list.find(x => x.id === req.params.id);
+  if (!c) return res.status(404).json({ error: '없는 채널' });
+  const arr = c.rundown?.items || [];
+  const from = arr.findIndex(x => (x.key ?? x.id) === req.body?.fromKey);
+  let to = Number(req.body?.toIndex);
+  if (from < 0 || !Number.isInteger(to)) return res.status(400).json({ error: '잘못된 이동' });
+  to = Math.max(0, Math.min(arr.length - 1, to > from ? to - 1 : to));
+  if (to === from) return res.json(withSchedule(c.rundown));
+  arr.splice(to, 0, arr.splice(from, 1)[0]);
+  saveChannels(list);
+  const full = withSchedule(c.rundown);
+  pushWindow(c.id, true);
+  res.json(full);
+});
+
 app.post('/api/channels/:id/rundown', (req, res) => {
   const list = channels();
   const c = list.find(x => x.id === req.params.id);

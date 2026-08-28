@@ -37,8 +37,9 @@ function connect() {
     const m = JSON.parse(e.data);
     if (m.type === 'hello') {
       library = m.library || [];
-      items = m.rundown?.items || [];
       seams = m.seams || [];
+      // m.rundown 은 출력창용 **롤링 윈도우**(앞으로 20분치)다. 편성 편집은
+      // 하루 전체를 다뤄야 하므로 여기서 목록으로 쓰지 않는다 — 따로 받아온다.
       renderAll();
     }
     if (m.type === 'library') { library = m.items; renderLib(); }
@@ -78,22 +79,29 @@ function renderRd() {
   const total = items.reduce((a, b) => a + b.durationMs, 0);
   $('rdMeta').textContent = items.length ? `${items.length}개 · ${ms(total)}` : '';
   if (!items.length) { el.innerHTML = '<div class="empty">주간 편성에서 블록을 만들고 <b>런다운 생성</b>을 누르세요.</div>'; return; }
-  let acc = 0;
-  // 항목이 많으면 앞부분만 그린다 — 6천 개를 모두 DOM 에 올릴 이유가 없다.
-  const view = items.slice(0, 300);
+  // 하루치는 수천 개다. 자정부터 그리면 화면 가득 과거 항목만 보이고
+  // (과거는 잠겨 있어) 아무것도 못 한다. **지금 지점부터** 보여준다.
+  // ?rows=N 으로 표시 개수를 바꿀 수 있다 (반응성 실측용).
+  const cap = Number(new URLSearchParams(location.search).get('rows')) || 300;
+  const oa = onAirIndex();
+  const from = Math.max(0, (oa >= 0 ? oa : 0) - 3);
+  const view = items.slice(from, from + cap);
   el.innerHTML = (items.length > view.length
-    ? `<div class="note" style="margin:0 0 6px">전체 ${items.length}개 중 300개만 표시합니다.</div>` : '') +
-    view.map((i, n) => {
-    const at = acc; acc += i.durationMs;
+    ? `<div class="note" style="margin:0 0 6px">전체 ${items.length}개 중 ` +
+      `${from + 1}~${from + view.length}번을 표시합니다 (현재 지점 기준).</div>` : '') +
+    view.map((i, vi) => {
+      const n = from + vi;
     const mk = i.timing && i.timing !== 'none'
       ? `<span class="badge2" style="color:#FF8478">${i.timing.toUpperCase()}</span>` : '';
     const len = (i.trimOutMs ?? i.durationMs) - (i.trimInMs ?? 0);
-    // 온에어 항목과 다음 1개는 드래그를 막는다 — 실수로 방송을 끊는 사고를 방지 (§4.3.7)
-    const locked = n <= onAirIndex() + 1 && onAirIndex() >= 0;
+    // 온에어 항목과 다음 1개는 드래그를 막는다 (§4.3.7).
+    // 이미 지난 항목도 막는다 — 순서를 바꿔봐야 의미가 없고, 뒤 항목의
+    // 시작 시각만 밀어버린다.
+    const locked = oa >= 0 && n <= oa + 1;
     return `<div class="row ${locked ? 'lock' : ''}" data-i="${n}">
       <span class="grip">${locked ? '🔒' : '⣿'}</span>
       <span class="n">${n + 1}</span>
-      <span class="d">${i.startMs != null ? ms(i.startMs) : ms(at)}</span>
+      <span class="d">${ms(i.startMs ?? 0)}</span>
       <span class="t">${esc(i.title)}</span>
       ${i.block ? `<span class="badge2">${esc(i.block)}</span>` : ''}${mk}
       <span class="d">${ms(len)}</span>
@@ -202,6 +210,14 @@ async function loadChannels() {
   $('chSel').innerHTML = chans.map(c =>
     `<option value="${c.id}" ${c.id===curCh?'selected':''}>${esc(c.name)} · ${c.blockCount}블록 · ` +
     `${c.rundownItems}항목</option>`).join('');
+}
+
+/** 하루치 런다운을 받아온다. 출력창이 받는 롤링 윈도우와는 별개다. */
+async function loadRundown() {
+  if (!curCh) return;
+  const r = await (await fetch(chUrl('/rundown'))).json();
+  items = r.items || [];
+  renderRd();
 }
 
 async function loadBlocks() {
@@ -522,6 +538,7 @@ function setTab(t) {
   $('paneRd').hidden = t!=='rundown';
   $('paneOut').hidden = t!=='output';
   if (t==='output') loadOutputs();
+  if (t==='rundown') loadRundown();
 }
 $('tabGrid').onclick = () => setTab('grid');
 $('tabRd').onclick = () => setTab('rundown');
@@ -604,14 +621,27 @@ document.addEventListener('pointerup', async () => {
   dline.hidden = dtip.hidden = true;
   d.row.classList.remove('drag');
   if (!d.live || d.to == null) return;
+  if (d.to === d.from) return;
+
+  const moved = items[d.from];
+  const snapshot = items.slice();
+  // 즉시 반영 — 되돌리기 위해 원본을 들고 있는다
   let to = d.to; if (to > d.from) to--;
-  if (to === d.from) return;
   items.splice(to, 0, items.splice(d.from, 1)[0]);
-  renderRd();                                   // 즉시 반영
-  const r = await (await fetch(chUrl('/rundown'), {
+  renderRd();
+
+  // 옮긴 사실만 보낸다. 하루치 전체를 올리면 본문 한계를 넘어 413 이 나고,
+  // 응답을 확인하지 않으면 화면만 바뀐 채 서버에는 반영되지 않는다.
+  const res = await fetch(chUrl('/rundown/move'), {
     method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ items }),
-  })).json();
+    body: JSON.stringify({ fromKey: moved.key ?? moved.id, toIndex: d.to }),
+  });
+  if (!res.ok) {
+    items = snapshot; renderRd();
+    alert(`순서를 저장하지 못했습니다 (${res.status}). 화면을 되돌렸습니다.`);
+    return;
+  }
+  const r = await res.json();
   items = r.items;                              // 서버가 다시 계산한 시작 시각으로 갱신
   renderRd();
   document.querySelectorAll('#rd .row .d').forEach(el => {
@@ -627,7 +657,8 @@ const renderAll = async () => {
 $('chSel').onchange = async e => {
   curCh = e.target.value; localStorage.setItem('hc.ch', curCh);
   selBlk = null; items = [];
-  await loadChannels(); await loadBlocks(); renderRd();
+  await loadChannels(); await loadBlocks();
+  if (tab === 'rundown') await loadRundown(); else renderRd();
 };
 $('chAdd').onclick = async () => {
   const name = prompt('채널 이름', `채널 ${chans.length + 1}`);
