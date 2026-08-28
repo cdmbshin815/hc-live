@@ -24,7 +24,7 @@ if (!inputs.includes(SRC)) {
 const items = (await obs.call('GetInputPropertiesListPropertyItems',
   { inputName: SRC, propertyName: 'window' })).propertyItems;
 const hit = items.filter(w => /Live ?Player|출력/i.test(w.itemName));
-console.log(`창 ${items.length}개 · HC Live 관련 ${hit.length}개`);
+console.log(`창 ${items.length}개 · HC LIVE 관련 ${hit.length}개`);
 hit.forEach(w => console.log('   ', w.itemName, '→', w.itemValue));
 if (!hit.length) {
   console.log('후보 일부:', items.slice(0, 10).map(w => w.itemName).join(' | '));

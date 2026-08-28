@@ -152,7 +152,7 @@ function renderSeams() {
 const SOURCES = [
   { kind: 'cloudflare', name: 'Cloudflare Stream',
     fields: [['accountId', '계정 ID'], ['apiToken', 'API 토큰 (Stream:Read)'],
-             ['creator', 'creator — HC Live 는 hcjoynLive'],
+             ['creator', 'creator — HC LIVE 는 hcjoynLive'],
              ['customerSubdomain', '재생 도메인 (선택 · customer-xxxx)']] },
   { kind: 'bunny', name: 'Bunny Stream',
     fields: [['libraryId', '라이브러리 ID'], ['apiKey', 'API 키'],

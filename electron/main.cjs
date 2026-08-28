@@ -26,7 +26,7 @@ function createAdmin() {
   adminWin = new BrowserWindow({
     width: 1440, height: 860, minWidth: 1080,
     backgroundColor: '#0E1113',
-    title: 'HC Live',
+    title: 'HC LIVE',
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true },
   });
   adminWin.loadURL(url('/admin/'));
@@ -78,7 +78,7 @@ function createOutput(o = {}) {
     frame: false,
     fullscreenable: true,
     backgroundColor: '#000000',
-    title: `HC Live — 출력 ${id}`,
+    title: `HC LIVE — 출력 ${id}`,
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true },
   });
 
@@ -128,7 +128,7 @@ app.whenReady().then(async () => {
   } catch (e) {
     // 서버가 안 뜨면 창을 열어봐야 아무것도 못 한다. 조용히 넘어가면
     // "앱은 떠 있는데 방송은 안 나가는" 최악의 상태가 된다.
-    dialog.showErrorBox('HC Live — 기동 실패',
+    dialog.showErrorBox('HC LIVE — 기동 실패',
       `로컬 서버를 시작하지 못했습니다.\n\n${e.message}`);
     app.quit();
     return;

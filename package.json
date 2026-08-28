@@ -2,7 +2,7 @@
   "name": "hc-live",
   "version": "0.1.0",
   "private": true,
-  "description": "HC Live — 편성 플레이아웃 (OBS·vMix 공급 / 모니터 직출력)",
+  "description": "HC LIVE — 24/7 Broadcast Automation System",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {

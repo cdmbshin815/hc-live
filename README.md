@@ -1,8 +1,11 @@
-# HC Live
+# HC LIVE
+
+**24/7 Broadcast Automation System**
 
 편성 플레이아웃 도구. 여러 소스를 하나의 편성표로 묶어 무결절로 재생하고,
 그 결과를 **OBS·vMix** 또는 **모니터**로 내보낸다.
 
+**[관리자 설명서](docs/사용자설명서.html)** — 설치·설정·운영·기술 자료
 기획서: [docs/기획서.md](docs/기획서.md) · UI 목업: [docs/mockups/편성화면.html](docs/mockups/편성화면.html)
 
 ## 현재 상태 — 2단계(MVP) 진행 중
@@ -93,7 +96,7 @@ Cloudflare 도 실계정으로 검증했다.
 
 **⚠ Cloudflare 는 `creator` 를 반드시 지정한다.** 이 계정은 CDMB CMS 와 공용이며
 CMS 영상이 `creator=cms` 로 들어 있다. creator 를 비우면 CMS 설명서 영상 42건이
-라이브러리에 딸려 들어와 편성에 섞인다. HC Live 는 `creator=hcjoynLive` 를 쓴다.
+라이브러리에 딸려 들어와 편성에 섞인다. HC LIVE 는 `creator=hcjoynLive` 를 쓴다.
 
 **Bunny 핫링크 보호 주의** — 풀존이 기본적으로 레퍼러 없는 요청을 차단한다.
 브라우저는 레퍼러를 보내므로 재생에는 문제가 없지만, 서버에서 `curl` 로 확인하면

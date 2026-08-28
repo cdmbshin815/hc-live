@@ -1,0 +1,905 @@
+<title>HC LIVE 관리자 설명서</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+
+<style>
+/* 밝은 테마가 기본. 제품(다크 계기판)의 색을 이어받되 읽는 문서로 조정한다. */
+:root{
+  --bg:#FAFBFB; --surface:#FFFFFF; --sunk:#F1F4F5;
+  --line:#DFE6E8; --line-soft:#EBF0F1;
+  --text:#131A1D; --dim:#55666D; --faint:#83959C;
+  --accent:#0E7C8C; --accent-soft:#E4F2F4; --accent-line:#9CCBD3;
+  --onair:#B8362A; --onair-soft:#FBEAE8;
+  --warn:#8A6100; --warn-soft:#FCF3DF;
+  --ok:#20714A; --ok-soft:#E4F3EB;
+  --code-bg:#F4F7F8;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --sans:"IBM Plex Sans KR",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E1113; --surface:#14181B; --sunk:#191F23;
+    --line:#29333A; --line-soft:#1E262C;
+    --text:#E6EBED; --dim:#93A1A8; --faint:#64737B;
+    --accent:#4FB3C9; --accent-soft:#12242A; --accent-line:#2B6B79;
+    --onair:#FF6B5A; --onair-soft:#241413;
+    --warn:#FFC24A; --warn-soft:#241E10;
+    --ok:#5BC98C; --ok-soft:#10201A;
+    --code-bg:#0B0E10;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E1113; --surface:#14181B; --sunk:#191F23;
+  --line:#29333A; --line-soft:#1E262C;
+  --text:#E6EBED; --dim:#93A1A8; --faint:#64737B;
+  --accent:#4FB3C9; --accent-soft:#12242A; --accent-line:#2B6B79;
+  --onair:#FF6B5A; --onair-soft:#241413;
+  --warn:#FFC24A; --warn-soft:#241E10;
+  --ok:#5BC98C; --ok-soft:#10201A;
+  --code-bg:#0B0E10;
+}
+
+*,*::before,*::after{box-sizing:border-box}
+body{
+  margin:0;background:var(--bg);color:var(--text);
+  font-family:var(--sans);font-size:15px;line-height:1.75;
+  -webkit-font-smoothing:antialiased;
+}
+a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--accent-line)}
+a:hover{border-bottom-color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:2px}
+code{font-family:var(--mono);font-size:.86em;background:var(--code-bg);
+  padding:.12em .38em;border-radius:3px;border:1px solid var(--line-soft)}
+pre{font-family:var(--mono);font-size:12.5px;line-height:1.65;background:var(--code-bg);
+  border:1px solid var(--line);border-radius:8px;padding:14px 16px;overflow-x:auto;margin:0}
+pre code{background:none;border:0;padding:0;font-size:inherit}
+strong{font-weight:600}
+
+/* ── 뼈대 ─────────────────────────────────── */
+.wrap{max-width:1180px;margin:0 auto;padding:0 24px}
+.mast{border-bottom:1px solid var(--line);background:var(--surface)}
+.mast .wrap{padding-top:52px;padding-bottom:40px}
+.brandline{display:flex;align-items:center;gap:12px;margin-bottom:22px}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--onair);flex:0 0 auto;
+  box-shadow:0 0 0 4px var(--onair-soft)}
+.brandline span{font-family:var(--mono);font-size:11px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--dim)}
+h1{margin:0;font-size:clamp(30px,5vw,46px);font-weight:700;letter-spacing:-.02em;
+  line-height:1.12;text-wrap:balance}
+.tagline{margin:10px 0 0;font-family:var(--mono);font-size:13.5px;letter-spacing:.02em;
+  color:var(--accent)}
+.lede{margin:22px 0 0;max-width:64ch;font-size:16px;color:var(--dim)}
+.meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:24px}
+.meta span{font-family:var(--mono);font-size:11px;padding:4px 9px;border-radius:20px;
+  border:1px solid var(--line);color:var(--dim);background:var(--bg)}
+
+.cols{display:grid;grid-template-columns:232px minmax(0,1fr);gap:52px;
+  padding-top:44px;padding-bottom:80px}
+nav{position:sticky;top:24px;align-self:start;max-height:calc(100vh - 48px);overflow-y:auto}
+nav h2{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--faint);margin:0 0 12px}
+nav ol{list-style:none;margin:0;padding:0;counter-reset:s}
+nav li{counter-increment:s}
+nav a{display:flex;gap:9px;padding:5px 0;font-size:13.5px;color:var(--dim);border:0;
+  line-height:1.45}
+nav a::before{content:counter(s);font-family:var(--mono);font-size:11px;color:var(--faint);
+  flex:0 0 15px;text-align:right;padding-top:2px}
+nav a:hover{color:var(--accent)}
+
+main{min-width:0;counter-reset:sec}
+section{scroll-margin-top:24px;padding-bottom:8px}
+section + section{margin-top:56px;padding-top:44px;border-top:1px solid var(--line-soft)}
+h2{counter-increment:sec;margin:0 0 8px;font-size:25px;font-weight:600;letter-spacing:-.015em;
+  line-height:1.25;text-wrap:balance;display:flex;gap:13px;align-items:baseline}
+h2::before{content:counter(sec);font-family:var(--mono);font-size:13px;font-weight:500;
+  color:var(--accent);flex:0 0 auto}
+h3{margin:34px 0 8px;font-size:17px;font-weight:600;letter-spacing:-.01em}
+h4{margin:24px 0 6px;font-size:14.5px;font-weight:600;color:var(--dim)}
+p{margin:0 0 14px;max-width:70ch}
+ul,ol{margin:0 0 14px;padding-left:22px;max-width:70ch}
+li{margin-bottom:5px}
+li::marker{color:var(--faint)}
+.sub{margin:0 0 22px;color:var(--dim);max-width:66ch}
+
+/* ── 표 ───────────────────────────────────── */
+.tw{overflow-x:auto;margin:0 0 18px;border:1px solid var(--line);border-radius:8px;
+  background:var(--surface)}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{text-align:left;font-weight:600;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--faint);padding:10px 14px;border-bottom:1px solid var(--line);
+  background:var(--sunk);white-space:nowrap}
+td{padding:10px 14px;border-bottom:1px solid var(--line-soft);vertical-align:top;line-height:1.6}
+tr:last-child td{border-bottom:0}
+td code{white-space:nowrap}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+
+/* ── 강조 블록 ────────────────────────────── */
+.note{border-left:3px solid var(--accent);background:var(--accent-soft);
+  padding:13px 16px;border-radius:0 6px 6px 0;margin:0 0 18px;max-width:70ch}
+.note.warn{border-left-color:var(--warn);background:var(--warn-soft)}
+.note.crit{border-left-color:var(--onair);background:var(--onair-soft)}
+.note p:last-child{margin-bottom:0}
+.note .lbl{display:block;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;
+  text-transform:uppercase;margin-bottom:5px;color:var(--accent)}
+.note.warn .lbl{color:var(--warn)} .note.crit .lbl{color:var(--onair)}
+
+.steps{list-style:none;padding:0;counter-reset:st;max-width:70ch}
+.steps li{counter-increment:st;position:relative;padding-left:34px;margin-bottom:14px}
+.steps li::before{content:counter(st);position:absolute;left:0;top:1px;
+  width:22px;height:22px;border-radius:50%;background:var(--accent-soft);
+  border:1px solid var(--accent-line);color:var(--accent);
+  font-family:var(--mono);font-size:11px;display:flex;align-items:center;justify-content:center}
+
+.pill{display:inline-block;font-family:var(--mono);font-size:10.5px;padding:2px 7px;
+  border-radius:11px;border:1px solid var(--line);color:var(--dim);white-space:nowrap}
+.pill.ok{color:var(--ok);border-color:var(--ok);background:var(--ok-soft)}
+.pill.warn{color:var(--warn);border-color:var(--warn);background:var(--warn-soft)}
+.pill.crit{color:var(--onair);border-color:var(--onair);background:var(--onair-soft)}
+
+.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 18px;font-size:13.5px;
+  margin:0 0 18px;max-width:70ch}
+.kv dt{font-family:var(--mono);font-size:12.5px;color:var(--accent);white-space:nowrap}
+.kv dd{margin:0 0 6px;color:var(--dim)}
+
+.flow{font-family:var(--mono);font-size:12.5px;line-height:1.9;background:var(--code-bg);
+  border:1px solid var(--line);border-radius:8px;padding:16px 18px;overflow-x:auto;
+  margin:0 0 18px;white-space:pre;color:var(--dim)}
+.flow b{color:var(--text);font-weight:500}
+
+footer{border-top:1px solid var(--line);background:var(--surface)}
+footer .wrap{padding:26px 24px 40px;font-size:12.5px;color:var(--faint)}
+
+@media (prefers-reduced-motion:reduce){*{animation:none !important;transition:none !important}}
+@media (max-width:900px){
+  .cols{grid-template-columns:1fr;gap:0;padding-top:28px}
+  nav{position:static;max-height:none;margin-bottom:36px;padding-bottom:24px;
+    border-bottom:1px solid var(--line)}
+  nav ol{columns:2;column-gap:24px}
+}
+</style>
+
+<header class="mast">
+  <div class="wrap">
+    <div class="brandline"><i class="dot"></i><span>ON AIR · 관리자 설명서</span></div>
+    <h1>HC LIVE</h1>
+    <p class="tagline">24/7 Broadcast Automation System</p>
+    <p class="lede">
+      흩어져 있는 영상 소스를 하나의 편성표로 묶어 검은 화면 없이 이어 재생하고,
+      그 결과를 OBS·vMix 또는 모니터로 내보내는 다채널 플레이아웃 도구입니다.
+      이 문서는 시스템을 설치·설정·운영하는 관리자를 위한 것입니다.
+    </p>
+    <div class="meta">
+      <span>v0.1</span><span>2026-08-28</span><span>macOS · Windows</span>
+      <span>Electron + Node.js</span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap cols">
+<nav aria-label="목차">
+  <h2>목차</h2>
+  <ol>
+    <li><a href="#s1">개요와 범위</a></li>
+    <li><a href="#s2">설치와 첫 실행</a></li>
+    <li><a href="#s3">화면 구성</a></li>
+    <li><a href="#s4">소스 연결</a></li>
+    <li><a href="#s5">편성하기</a></li>
+    <li><a href="#s6">채널과 출력</a></li>
+    <li><a href="#s7">송출 연결</a></li>
+    <li><a href="#s8">무인 운영</a></li>
+    <li><a href="#s9">설정 참조</a></li>
+    <li><a href="#s10">기술 자료</a></li>
+    <li><a href="#s11">실측 데이터</a></li>
+    <li><a href="#s12">문제 해결</a></li>
+    <li><a href="#s13">알려진 제약</a></li>
+  </ol>
+</nav>
+
+<main>
+
+<!-- 1 ────────────────────────────────────── -->
+<section id="s1">
+  <h2>개요와 범위</h2>
+  <p class="sub">무엇을 하는 도구이고, 무엇을 하지 않는지 먼저 정리합니다.</p>
+
+  <p>
+    HC LIVE는 <strong>편성한 내용을 끊김 없이 재생하는 것</strong>까지를 책임집니다.
+    인코딩과 실제 송출은 OBS나 vMix가 담당하고, HC LIVE는 그들에게 깨끗한 화면을 공급합니다.
+    모니터에 직접 띄우는 것도 가능합니다.
+  </p>
+
+  <div class="flow"><b>소스</b>          <b>HC LIVE</b>                    <b>출력</b>
+로컬 파일    ┐                              ┌ 모니터 (최종 화면)
+지정 폴더    ├→  편성 → 무결절 재생 → 출력창 ─┤
+유튜브       │                              └ OBS·vMix → 유튜브 라이브
+Cloudflare   │
+Bunny        ┘</div>
+
+  <h3>하는 일</h3>
+  <ul>
+    <li>여러 출처의 영상을 <strong>하나의 라이브러리</strong>로 묶습니다</li>
+    <li>요일·시간대 단위로 편성하고, 나머지 시간은 자동으로 채웁니다</li>
+    <li>항목 전환 시 <strong>검은 화면이 나가지 않습니다</strong></li>
+    <li>채널을 여러 개 동시에, 각각 다른 편성으로 운영합니다</li>
+    <li>사람 없이 24시간 돌아갑니다</li>
+  </ul>
+
+  <h3>하지 않는 일</h3>
+  <ul>
+    <li><strong>인코딩·트랜스코딩</strong> — OBS/vMix가 합니다</li>
+    <li><strong>직접 RTMP 송출</strong> — 스트리밍 출력은 OBS/vMix에 위임합니다</li>
+    <li><strong>영상 편집</strong> — 컷 편집, 자막 렌더링, 합성은 다루지 않습니다</li>
+    <li><strong>시청자 전송(CDN) 운영</strong> — 별도 컴포넌트의 영역입니다</li>
+  </ul>
+
+  <div class="note">
+    <span class="lbl">CDMB CMS와의 차이</span>
+    <p>
+      CMS는 전광판·매장 TV 같은 <strong>디스플레이를 관리</strong>하는 제품입니다.
+      HC LIVE는 <strong>편성을 방송</strong>하는 제품입니다. HC LIVE의 모니터 출력은
+      같은 PC에 연결된 로컬 모니터만 대상으로 하며, 원격지 디스플레이 관리·밝기 제어·
+      포스터 우선송출 같은 사이니지 기능은 다루지 않습니다.
+    </p>
+  </div>
+</section>
+
+<!-- 2 ────────────────────────────────────── -->
+<section id="s2">
+  <h2>설치와 첫 실행</h2>
+
+  <h3>준비물</h3>
+  <div class="tw"><table>
+    <tr><th>항목</th><th>요구</th><th>비고</th></tr>
+    <tr><td>운영체제</td><td>macOS 12+ / Windows 10+</td><td></td></tr>
+    <tr><td>Node.js</td><td>20 이상</td><td>앱 실행에 필요</td></tr>
+    <tr><td>ffmpeg / ffprobe</td><td>필수</td><td>영상 길이·해상도를 실측합니다</td></tr>
+    <tr><td>GPU</td><td>하드웨어 디코딩 지원</td><td>다채널에 특히 중요</td></tr>
+    <tr><td>OBS</td><td>28 이상 (선택)</td><td>모니터 직출력만 쓰면 불필요</td></tr>
+  </table></div>
+
+  <h3>설치</h3>
+  <pre><code>npm install
+npm run clips     # 검증용 테스트 클립 생성 (선택)
+npm run app       # 앱 실행</code></pre>
+
+  <p>
+    실행하면 관리 창이 열리고, 로컬 서버가 <code>127.0.0.1:4200</code>에서 시작합니다.
+    포트가 이미 쓰이고 있으면 <strong>자동으로 다음 포트를 찾습니다</strong>.
+  </p>
+
+  <div class="note warn">
+    <span class="lbl">기동 실패는 조용히 넘어가지 않습니다</span>
+    <p>
+      서버를 시작하지 못하면 오류 창을 띄우고 앱이 종료됩니다.
+      앱은 떠 있는데 방송은 안 나가는 상태를 만들지 않기 위한 것입니다.
+    </p>
+  </div>
+
+  <h3>첫 편성까지</h3>
+  <ol class="steps">
+    <li><strong>영상 넣기</strong> — <code>media/</code> 폴더 아래에 영상 파일을 둡니다. 하위 폴더는 그대로 소스 그룹이 됩니다.</li>
+    <li><strong>라이브러리 스캔</strong> — 관리 화면 우측 상단 <em>라이브러리 스캔</em>. 길이·해상도를 실측해 목록에 올립니다.</li>
+    <li><strong>블록 배치</strong> — <em>주간 편성</em> 탭에서 빈 시간을 세로로 끌어 블록을 만들고, 소스 그룹·요일·시간대를 정합니다.</li>
+    <li><strong>자동 채움</strong> — <em>나머지 시간 자동 채움</em>을 눌러 24시간을 완성합니다.</li>
+    <li><strong>런다운 생성</strong> — 편성 규칙이 그날의 재생 목록으로 만들어집니다.</li>
+    <li><strong>출력창 열기</strong> — <em>출력</em> 탭에서 모니터를 배정하거나 창 캡처 출력을 추가합니다.</li>
+  </ol>
+</section>
+
+<!-- 3 ────────────────────────────────────── -->
+<section id="s3">
+  <h2>화면 구성</h2>
+  <p class="sub">관리 화면은 세 개의 탭으로 나뉩니다. 편성의 흐름을 그대로 따릅니다.</p>
+
+  <div class="tw"><table>
+    <tr><th>탭</th><th>다루는 것</th><th>단위</th></tr>
+    <tr><td><strong>주간 편성</strong></td><td>편성 블록 배치 + 자동 채움</td><td>요일 × 시간대 (규칙)</td></tr>
+    <tr><td><strong>런다운</strong></td><td>생성된 하루치 재생 목록, 미세 조정</td><td>항목 (실행)</td></tr>
+    <tr><td><strong>출력</strong></td><td>모니터 배정, 해상도·스케일·오디오</td><td>출력</td></tr>
+  </table></div>
+
+  <p>
+    좌측은 <strong>라이브러리와 소스 연결</strong>, 우측은 <strong>전환 계측</strong>입니다.
+    계측은 전환이 얼마나 매끄러웠는지를 실시간으로 보여줍니다 —
+    자세한 읽는 법은 <a href="#s8">8장</a>에 있습니다.
+  </p>
+
+  <div class="note">
+    <span class="lbl">왜 그리드와 리스트가 나뉘어 있나</span>
+    <p>
+      주간 편성은 반복되는 규칙이라 <strong>요일 × 시간 격자</strong>가 맞습니다.
+      런다운은 하루 수백~수천 항목이라 시간 축에 배치하면 짧은 항목이 몇 픽셀이 되어
+      다룰 수 없습니다. 그래서 <strong>목록</strong>입니다.
+      규칙은 그리드에서 놓고, 결과는 목록에서 확인합니다.
+    </p>
+  </div>
+</section>
+
+<!-- 4 ────────────────────────────────────── -->
+<section id="s4">
+  <h2>소스 연결</h2>
+  <p class="sub">출처가 달라도 편성기와 재생 엔진은 같은 형태의 항목만 봅니다.</p>
+
+  <div class="tw"><table>
+    <tr><th>소스</th><th>등록</th><th>재생</th><th>필러 후보</th></tr>
+    <tr><td>로컬 파일 · 폴더</td><td><code>media/</code> 아래에 두고 스캔</td><td>파일 직접</td><td class="num">가능</td></tr>
+    <tr><td>HLS 플레이리스트</td><td><code>.m3u8</code> 자동 인식</td><td>hls.js</td><td class="num">가능</td></tr>
+    <tr><td>Cloudflare Stream</td><td>소스 연결에서 자격증명</td><td>hls.js</td><td class="num">불가</td></tr>
+    <tr><td>Bunny Stream</td><td>소스 연결에서 자격증명</td><td>hls.js</td><td class="num">불가</td></tr>
+  </table></div>
+
+  <div class="note">
+    <span class="lbl">원격 소스가 필러가 될 수 없는 이유</span>
+    <p>
+      필러가 필요한 상황은 대개 <strong>네트워크 장애</strong>입니다.
+      그때 클라우드에 있는 필러는 정작 쓸 수 없습니다. 필러 후보는 로컬 항목으로만 잡습니다.
+    </p>
+  </div>
+
+  <h3>Cloudflare Stream</h3>
+  <dl class="kv">
+    <dt>accountId</dt><dd>Cloudflare 계정 ID</dd>
+    <dt>apiToken</dt><dd>권한은 <code>Account → Stream → Read</code>면 충분합니다</dd>
+    <dt>creator</dt><dd><strong>반드시 지정합니다.</strong> 아래 경고를 읽어주세요</dd>
+    <dt>customerSubdomain</dt><dd>재생 도메인 (선택). 응답에 재생 주소가 있으면 쓰지 않습니다</dd>
+  </dl>
+
+  <div class="note crit">
+    <span class="lbl">creator를 비우면 안 됩니다</span>
+    <p>
+      이 Cloudflare 계정은 CDMB CMS와 공용입니다. CMS의 설명서 영상이 같은 계정에
+      <code>creator=cms</code> 또는 creator 없이 들어 있습니다.
+      creator를 비우고 동기화하면 <strong>CMS 영상 42건이 라이브러리에 딸려 들어오고</strong>,
+      자동 채움을 돌리면 그대로 방송에 나갑니다.
+    </p>
+    <p>HC LIVE는 <code>creator=hcjoynLive</code>를 씁니다. 영상을 업로드할 때도 이 값을 지정해야 목록에 잡힙니다.</p>
+  </div>
+
+  <h3>Bunny Stream</h3>
+  <dl class="kv">
+    <dt>libraryId</dt><dd>Video Library ID</dd>
+    <dt>apiKey</dt><dd><strong>읽기 전용 키</strong>를 권합니다. 목록 조회만 하면 됩니다</dd>
+    <dt>cdnHost</dt><dd>재생용 호스트 (<code>vz-xxxxxxxx.b-cdn.net</code>)</dd>
+  </dl>
+
+  <div class="note warn">
+    <span class="lbl">두 가지를 오해하기 쉽습니다</span>
+    <p>
+      <strong>인코딩 중인 영상은 재생되지 않습니다.</strong> Bunny의 <code>status</code>가 4(완료)가
+      되기 전에는 HLS 주소가 403을 돌려줍니다. 목록에는 <span class="pill warn">준비 중</span>으로 표시됩니다.
+    </p>
+    <p>
+      <strong>서버에서 <code>curl</code>로 확인하면 403이 납니다.</strong> Bunny 풀존이 레퍼러 없는 요청을
+      차단하기 때문입니다. 브라우저는 레퍼러를 보내므로 실제 재생은 정상입니다 —
+      이것을 재생 불가로 오인하지 마세요.
+    </p>
+  </div>
+
+  <h3>자격증명 보관</h3>
+  <p>
+    입력한 값은 <code>data/credentials.json</code>에만 저장되며 저장소에 올라가지 않습니다.
+    조회 API는 <strong>설정 여부만</strong> 돌려주고 값 자체는 절대 내보내지 않습니다.
+    화면에 입력한 내용도 저장 후 지워집니다.
+  </p>
+</section>
+
+<!-- 5 ────────────────────────────────────── -->
+<section id="s5">
+  <h2>편성하기</h2>
+  <p class="sub">편성은 세 단계입니다. 손으로 하는 것은 1단계뿐이고, 나머지는 버튼 하나입니다.</p>
+
+  <div class="flow"><b>1. 편성 블록</b>   어느 소스 그룹을 → 기간 × 요일(복수) × 시간대(복수)에
+       ↓        ← 운영자가 직접 하는 유일한 작업
+<b>2. 자동 채움</b>   블록이 없는 나머지 모든 시간
+       ↓        ← 버튼 하나
+<b>3. 런다운</b>      날짜별 실제 재생 목록. 시작 시각이 초 단위로 확정됨
+       ↓
+   미세 조정 → 확정 · 송출</div>
+
+  <h3>편성 블록</h3>
+  <p>개별 영상이 아니라 <strong>"어느 그룹을 언제"</strong>를 지정합니다.</p>
+
+  <div class="tw"><table>
+    <tr><th>항목</th><th>설명</th></tr>
+    <tr><td>소스 그룹</td><td>폴더·재생목록·라이브러리 단위. 파일이 추가되면 다음 생성 때 자동 반영됩니다</td></tr>
+    <tr><td>기간</td><td>시작일~종료일. 끝나면 그 시간대는 자동 채움으로 넘어갑니다</td></tr>
+    <tr><td>요일 · 복수</td><td>월·수·금처럼 여러 요일에 동시 적용</td></tr>
+    <tr><td>시간대 · 복수</td><td>09:00–12:00 그리고 19:00–21:00처럼 하루에 여러 구간</td></tr>
+    <tr><td>재생 순서</td><td>순차 / 랜덤 / <strong>미방영 우선</strong>(오래 안 나간 것부터)</td></tr>
+    <tr><td>시간 맞춤</td><td>아래 표 참조</td></tr>
+  </table></div>
+
+  <h4>시간 맞춤 — 소재 길이와 시간대가 안 맞을 때</h4>
+  <div class="tw"><table>
+    <tr><th>모드</th><th>동작</th></tr>
+    <tr><td><strong>반복</strong></td><td>그룹을 처음부터 다시 돌려 시간대를 끝까지 채웁니다</td></tr>
+    <tr><td><strong>필러</strong></td><td>한 바퀴 돈 뒤 남는 시간은 브리지·스팟으로 메웁니다</td></tr>
+    <tr><td><strong>잘라내기</strong></td><td>끝에 걸치는 영상을 잘라 정확히 맞춥니다</td></tr>
+  </table></div>
+
+  <h3>고정 시각 마커</h3>
+  <p>
+    "정시에 시작"은 실제로 세 가지 다른 의미입니다. 하나로 뭉뚱그리면 운영 중에 반드시 문제가 됩니다.
+  </p>
+  <div class="tw"><table>
+    <tr><th>마커</th><th>동작</th><th>쓰는 상황</th></tr>
+    <tr><td><span class="pill crit">HARD</span></td><td>그 시각에 <strong>재생 중인 항목을 끊고</strong> 시작</td>
+        <td>정시 뉴스, 계약 광고. <strong>블록 시작에 자동 부여</strong></td></tr>
+    <tr><td><span class="pill warn">SOFT</span></td><td>앞 항목이 <strong>끝나기를 기다렸다가</strong> 시작</td>
+        <td>화면이 잘리는 게 더 나쁜 경우</td></tr>
+    <tr><td><span class="pill">NOT BEFORE</span></td><td>그 시각 <strong>전에는 시작하지 않음</strong></td>
+        <td>특정 시각 이후에만 나가야 하는 콘텐츠</td></tr>
+  </table></div>
+  <p>
+    Hard는 앞 항목을 자르므로 편집 화면에서 <em>N초 잘림</em>을 미리 경고합니다.
+    Not Before는 공백을 만들 수 있어 필러를 제안합니다.
+  </p>
+
+  <h3>자동 채움</h3>
+  <p>
+    블록이 없는 모든 시간을 한 번에 채워 24시간 편성을 완성하는 단계입니다.
+    커버리지가 100%가 되어야 완성된 것입니다.
+  </p>
+  <div class="note warn">
+    <span class="lbl">짧은 소재로 채우면 항목이 폭증합니다</span>
+    <p>
+      11초짜리 클립으로 하루를 채우면 <strong>6,000개가 넘습니다</strong>.
+      생성 자체는 빠르지만 목록과 전송이 무거워집니다. 1,000개를 넘으면 경고가 뜹니다.
+      자동 채움 소재는 되도록 길게(1분 이상) 잡는 것을 권합니다.
+    </p>
+  </div>
+
+  <h3>런다운 조정</h3>
+  <p>
+    생성된 목록은 <strong>현재 지점부터</strong> 표시됩니다. 자정부터 그리면 화면 가득 과거만 보이고,
+    과거는 잠겨 있어 아무것도 할 수 없기 때문입니다.
+  </p>
+  <ul>
+    <li><strong>드래그로 순서 변경</strong> — 놓는 즉시 이후 시작 시각이 다시 계산됩니다</li>
+    <li><strong>온에어 항목과 다음 1개는 잠깁니다</strong> <span class="pill">🔒</span> — 실수로 방송을 끊는 사고 방지</li>
+    <li>항목마다 어느 블록에서 왔는지 표시됩니다. 문제가 생기면 블록으로 거슬러 올라갈 수 있습니다</li>
+    <li><strong>다시 생성</strong>은 블록 설정대로 새로 만듭니다. 손으로 고친 내용이 있으면 확인을 받습니다</li>
+  </ul>
+</section>
+
+<!-- 6 ────────────────────────────────────── -->
+<section id="s6">
+  <h2>채널과 출력</h2>
+  <p class="sub">라이브러리는 전 채널이 공유하고, 편성·런다운·출력은 채널마다 독립입니다.</p>
+
+  <h3>채널</h3>
+  <p>
+    채널은 <strong>독립된 하나의 송출 라인</strong>입니다. 자체 편성과 하나 이상의 출력을 가집니다.
+    한 채널이 장애로 재기동해도 다른 채널은 영향받지 않습니다.
+  </p>
+
+  <h3>출력 세 가지</h3>
+  <div class="tw"><table>
+    <tr><th>유형</th><th>최종 목적지</th><th>제약</th></tr>
+    <tr><td><strong>모니터 직출력</strong></td><td>연결된 모니터 = 최종 화면</td>
+        <td>물리 모니터가 실제로 연결돼 있어야 합니다. <strong>최대 4대</strong></td></tr>
+    <tr><td><strong>창 캡처</strong></td><td>OBS·vMix가 캡처 → 인코딩</td>
+        <td>창 픽셀 수만큼의 실제 화면 공간이 필요합니다</td></tr>
+    <tr><td><strong>NDI</strong></td><td>OBS·vMix가 수신</td>
+        <td>조건부 기능 — 화면 공간이 부족할 때. 아직 미구현</td></tr>
+  </table></div>
+  <p>조합할 수 있습니다. 한 채널이 창 캡처(OBS용) + 모니터 두 대를 동시에 가질 수 있습니다.</p>
+
+  <h3>모니터 배정</h3>
+  <p>
+    <em>출력</em> 탭의 배치도는 OS 디스플레이 설정과 같은 상대 위치·비율로 그려집니다.
+    모니터는 <strong>전역 자원</strong>이고 출력은 채널 소유입니다 — 한 모니터에는 출력 하나만 들어갑니다.
+  </p>
+  <ul>
+    <li><strong>빈 모니터 클릭</strong> → 현재 채널에 배정. 해상도는 자동 감지</li>
+    <li><strong>다른 채널이 쓰는 모니터</strong> → 확인을 받고 가져옵니다. 조용히 뺏지 않습니다</li>
+    <li><strong>연결 끊김</strong> → 해당 출력만 멈추고, 재연결하면 자동 복귀합니다</li>
+  </ul>
+
+  <h4>스케일 모드</h4>
+  <div class="tw"><table>
+    <tr><th>모드</th><th>동작</th><th>쓰임</th></tr>
+    <tr><td>1:1</td><td>스케일 없이 원본 픽셀</td><td>해상도가 정확히 일치할 때. 무왜곡</td></tr>
+    <tr><td>여백맞춤</td><td>비율 유지, 남는 곳은 검은 여백</td><td>기본값. 왜곡 없음</td></tr>
+    <tr><td>꽉채움</td><td>비율 유지, 넘치는 부분 잘림</td><td>화면을 꽉 채워야 할 때</td></tr>
+    <tr><td>늘림</td><td>비율 무시하고 늘림</td><td>특수 비율. 왜곡 발생</td></tr>
+  </table></div>
+
+  <h3>오디오</h3>
+  <div class="note">
+    <span class="lbl">채널당 하나만 소리를 냅니다</span>
+    <p>
+      같은 채널을 여러 모니터에 띄우면 각 출력이 같은 내용을 재생하므로,
+      그대로 두면 <strong>소리가 겹쳐 에코가 납니다</strong>. 오디오는 라디오 버튼처럼 동작해서
+      하나를 켜면 나머지는 자동 음소거됩니다. 담당 출력이 내려가면 다음 출력이 승계합니다.
+    </p>
+  </div>
+  <p>
+    채널이 두 개 이상이면 <strong>전용 오디오 장치</strong>가 필요합니다.
+    시스템 기본 출력으로는 모든 채널이 한 버스에 섞여 분리할 수 없습니다.
+    macOS는 BlackHole, Windows는 VB-Cable 같은 가상 오디오 드라이버를 쓰며,
+    앱은 장치 부족을 감지해 안내만 하고 설치하지는 않습니다.
+  </p>
+
+  <h3>부하 안내</h3>
+  <p>
+    부하의 단위는 채널이 아니라 <strong>출력</strong>입니다. 채널이 하나여도 모니터 3대에 미러하면
+    디코딩이 3개입니다. 출력을 3개 이상 추가하면 <strong>OS 디스플레이 미러링</strong> 안내가 뜹니다 —
+    같은 화면을 여러 모니터에 띄우는 것이 목적이라면 그쪽이 디코딩 1회로 끝납니다.
+  </p>
+</section>
+
+<!-- 7 ────────────────────────────────────── -->
+<section id="s7">
+  <h2>송출 연결</h2>
+
+  <h3>OBS 창 캡처</h3>
+  <ol class="steps">
+    <li>HC LIVE에서 <strong>창 캡처</strong> 유형 출력을 추가합니다.</li>
+    <li>OBS에서 소스 추가 → <strong>화면 캡처</strong>(macOS) 또는 <strong>윈도우 캡처</strong>(Windows).</li>
+    <li>창 목록에서 <code>HC LIVE — 출력</code>을 고릅니다. 채널마다 창이 하나씩 있습니다.</li>
+    <li>OBS 캔버스 해상도를 출력창 해상도와 맞춥니다.</li>
+  </ol>
+
+  <div class="note warn">
+    <span class="lbl">해상도는 화면 배율의 영향을 받습니다</span>
+    <p>
+      창 크기는 논리 포인트지만 <strong>OBS는 물리 픽셀을 캡처</strong>합니다.
+      Retina(배율 2) 화면에서 논리 960×540 창은 OBS에서 <strong>1920×1080</strong>으로 잡힙니다.
+      HC LIVE는 요청 해상도를 화면 배율로 나눠 창을 만들기 때문에,
+      1920×1080을 지정하면 OBS에서도 1920×1080으로 들어옵니다.
+    </p>
+    <p>
+      이 처리가 없으면 Retina에서 1920 요청이 <strong>3840×2160 캡처</strong>가 되어
+      의도치 않은 4K 부하가 걸립니다.
+    </p>
+  </div>
+
+  <h3>유튜브 라이브</h3>
+  <p>
+    기본 전송처는 유튜브 라이브입니다. 전송비가 들지 않고 도달이 가장 넓습니다.
+    HC LIVE → OBS → RTMP → 유튜브 순서이며, HC LIVE는 OBS까지만 책임집니다.
+  </p>
+  <p>
+    자체 전송(CDN)이 필요해지는 계기는 대개 셋입니다 — 플랫폼 리스크가 현실화될 때,
+    접근 권한 제어가 필요할 때, 광고·브랜딩을 완전히 통제해야 할 때.
+    그때는 OBS 다중 출력으로 유튜브와 자체 채널을 동시에 내보낼 수 있습니다.
+  </p>
+
+  <h3>콘텐츠 정책</h3>
+  <div class="note crit">
+    <span class="lbl">본인 소유 콘텐츠만</span>
+    <p>
+      유튜브 소스는 <strong>OAuth로 인증한 본인 채널의 영상·재생목록만</strong> 등록할 수 있습니다.
+      임의의 유튜브 URL 붙여넣기는 구현하지 않았습니다.
+      Cloudflare·Bunny도 본인 계정의 라이브러리만 연결합니다.
+      저작권과 각 서비스 이용약관 준수를 위한 것이며 기능 편의를 이유로 완화하지 않습니다.
+    </p>
+  </div>
+</section>
+
+<!-- 8 ────────────────────────────────────── -->
+<section id="s8">
+  <h2>무인 운영</h2>
+
+  <h3>자동 시작</h3>
+  <p>
+    앱 안에서 열리는 출력창은 <strong>사람의 클릭 없이</strong> 재생을 시작합니다.
+    무인 운영에서 사람이 버튼을 눌러줘야 한다면 그건 무인이 아니기 때문입니다.
+    24시간 채널은 언제 시작하든 <strong>지금 나가야 할 지점</strong>부터 나갑니다.
+  </p>
+
+  <h3>대기 화면</h3>
+  <p>
+    편성이 비어 있거나 복구 중일 때는 <strong>로고</strong>가 나갑니다. 검은 화면은 쓰지 않습니다 —
+    모니터에서는 장비 고장으로 오인되고, OBS에서는 신호 유실과 구분되지 않기 때문입니다.
+  </p>
+  <p>
+    로고는 설정에서 등록하며, 등록 전에는 앱 내장 로고가 나갑니다.
+    대기 화면 진입은 <strong>계획된 공백</strong>과 <strong>장애</strong>를 구분해 기록합니다.
+  </p>
+
+  <h3>장애 복구</h3>
+  <div class="tw"><table>
+    <tr><th>상황</th><th>대응</th></tr>
+    <tr><td>다음 항목 로딩 실패</td><td>즉시 다음 항목으로 넘어가고 기록합니다</td></tr>
+    <tr><td>대기 레이어 미준비</td><td><strong>전환하지 않습니다.</strong> 화면이 끊기느니 현재 항목을 조금 더 재생합니다</td></tr>
+    <tr><td>채울 항목 없음</td><td>필러 → 로고 대기 화면 순으로 내려갑니다</td></tr>
+    <tr><td>출력창 응답 없음</td><td>그 출력만 재기동하고 현재 지점으로 복귀합니다</td></tr>
+    <tr><td>모니터 연결 해제</td><td>해당 출력만 멈추고 재연결 시 복귀합니다</td></tr>
+    <tr><td>서버 기동 실패</td><td>오류를 화면에 띄우고 종료합니다</td></tr>
+  </table></div>
+
+  <h3>계측 읽는 법</h3>
+  <p>화면 우측의 전환 계측은 방송 품질을 실시간으로 보여줍니다.</p>
+  <div class="tw"><table>
+    <tr><th>지표</th><th>의미</th><th>정상</th></tr>
+    <tr><td>간극</td><td>전환 판정부터 다음 항목의 첫 프레임 표시까지</td><td class="num">한 프레임 미만</td></tr>
+    <tr><td>의심</td><td>간극이 두 프레임을 넘은 전환</td><td class="num">0건</td></tr>
+    <tr><td>전환 보류</td><td>대기 레이어가 준비 안 돼 미뤄진 횟수</td><td class="num">0건</td></tr>
+    <tr><td>버퍼 미달</td><td>전환 시점에 버퍼가 덜 찬 횟수</td><td class="num">0건</td></tr>
+  </table></div>
+
+  <div class="note">
+    <span class="lbl">간극이 "계측 불가"로 나올 때</span>
+    <p>
+      간극은 출력창이 <strong>화면에 보일 때만</strong> 잴 수 있습니다.
+      창이 다른 창에 가려지면 브라우저 엔진이 프레임 콜백을 멈추기 때문입니다.
+      <strong>재생은 정상입니다</strong> — 전환은 타이머가 보장하므로 창이 가려져도 편성은 정확히 나갑니다.
+      부하를 판단할 때는 간극 대신 <em>전환 보류</em>와 <em>버퍼 미달</em>을 보세요.
+    </p>
+  </div>
+</section>
+
+<!-- 9 ────────────────────────────────────── -->
+<section id="s9">
+  <h2>설정 참조</h2>
+
+  <h3>환경 변수</h3>
+  <div class="tw"><table>
+    <tr><th>변수</th><th>기본값</th><th>설명</th></tr>
+    <tr><td><code>PORT</code></td><td class="num">4200</td><td>사용 중이면 자동으로 다음 포트를 찾습니다</td></tr>
+    <tr><td><code>HC_AUTO_OUTPUT</code></td><td>—</td><td><code>c1,c2</code>처럼 채널을 지정하면 기동 시 출력창을 자동으로 엽니다</td></tr>
+    <tr><td><code>HC_OUTPUT_W</code> / <code>HC_OUTPUT_H</code></td><td>—</td><td>출력창 논리 크기 강제. 실측용이며 디코딩 부하는 그대로입니다</td></tr>
+    <tr><td><code>FFMPEG_PATH</code></td><td>자동 탐색</td><td>ffmpeg 실행 파일 경로</td></tr>
+    <tr><td><code>FFPROBE_PATH</code></td><td>자동 탐색</td><td>ffprobe 실행 파일 경로</td></tr>
+  </table></div>
+
+  <h3>파일 위치</h3>
+  <div class="tw"><table>
+    <tr><th>경로</th><th>내용</th><th>저장소 포함</th></tr>
+    <tr><td><code>media/</code></td><td>영상 파일. 하위 폴더가 곧 소스 그룹</td><td class="num">아니오</td></tr>
+    <tr><td><code>data/db.json</code></td><td>라이브러리·채널·편성·런다운</td><td class="num">아니오</td></tr>
+    <tr><td><code>data/credentials.json</code></td><td>원격 소스 자격증명</td><td class="num">아니오</td></tr>
+  </table></div>
+
+  <h3>명령</h3>
+  <div class="tw"><table>
+    <tr><th>명령</th><th>하는 일</th></tr>
+    <tr><td><code>npm run app</code></td><td>Electron 앱 (서버 내장)</td></tr>
+    <tr><td><code>npm start</code></td><td>서버만. 브라우저에서 접속해 확인할 때</td></tr>
+    <tr><td><code>npm run clips</code></td><td>무결절 검증용 클립 생성 (가벼움)</td></tr>
+    <tr><td><code>npm run clips:heavy</code></td><td>부하 실측용 클립 생성 (15~18 Mbps)</td></tr>
+    <tr><td><code>npm run bench</code></td><td>채널 수를 늘려가며 부하 실측</td></tr>
+  </table></div>
+</section>
+
+<!-- 10 ───────────────────────────────────── -->
+<section id="s10">
+  <h2>기술 자료</h2>
+
+  <h3>구성</h3>
+  <div class="flow">Electron 메인 프로세스
+ ├ 로컬 서버 (Express + WebSocket)
+ │   ├ 소스 어댑터      6종 소스를 공통 항목으로 정규화
+ │   ├ 라이브러리       전 채널 공유
+ │   ├ 채널 매니저      채널 생명주기 · 자원 예산
+ │   ├ 출력 매니저      모니터 감지 · 배정 · 오디오 단일화
+ │   ├ 편성 엔진        블록 → 자동 채움 → 런다운
+ │   └ 미디어 스트리머  로컬 파일 Range 서빙
+ ├ 출력창 ×N           A/B 무결절 엔진 · UI 없음
+ └ 관리 창</div>
+
+  <p>
+    <strong>서버가 진실의 원천입니다.</strong> 시작 시각 계산, 고정 시각 마커 적용,
+    편성 생성이 모두 서버에서 이뤄집니다. 출력창은 판단하지 않고 지시받은 것을 재생합니다.
+    브라우저가 계산하면 출력창·관리 화면·재생성이 서로 다른 답을 낼 수 있기 때문입니다.
+  </p>
+
+  <h3>무결절 재생 엔진</h3>
+  <p>이 제품의 핵심입니다. 원리는 단순합니다.</p>
+  <ol class="steps">
+    <li>비디오 레이어를 <strong>두 개(A/B)</strong> 두고 한쪽만 앞에 둡니다.</li>
+    <li>A가 재생 중일 때 다음 항목을 B에 미리 로드하고 <strong>첫 프레임까지 디코드</strong>시켜 둡니다.</li>
+    <li>전환 직전 B를 아주 느린 배속으로 미리 돌려 재생 파이프라인을 깨웁니다(프리롤).</li>
+    <li>A의 종료 지점에서 <strong>같은 태스크 안에서</strong> B를 앞으로 보내고 A를 뒤로 보냅니다.</li>
+  </ol>
+  <p>
+    화면은 A의 마지막 프레임에서 B의 첫 프레임으로 바뀝니다. 검은 프레임이 낄 자리가 없습니다.
+    무결절의 실제 보장은 <strong>대기 레이어가 준비되지 않으면 전환 자체를 거부</strong>하는 데 있습니다.
+  </p>
+
+  <h4>전환 시점 판정</h4>
+  <p>두 경로를 함께 씁니다.</p>
+  <div class="tw"><table>
+    <tr><th>경로</th><th>역할</th></tr>
+    <tr><td><strong>타이머</strong></td><td>남은 시간에 맞춰 예약. <strong>반드시</strong> 발화하는 보장 경로</td></tr>
+    <tr><td><strong>프레임 콜백</strong></td><td>매 표시 프레임마다 확인. 프레임 단위로 정확하지만 창이 가려지면 멈춤</td></tr>
+  </table></div>
+  <div class="note">
+    <span class="lbl">왜 두 경로인가</span>
+    <p>
+      초기 구현은 프레임 콜백만 썼는데, 렌더링이 억제되는 환경에서 <strong>전환이 30초까지 밀렸습니다</strong>.
+      정밀도를 위한 장치가 정확성의 단일 실패점이 되어서는 안 됩니다.
+      실제로 40분 무인 운전에서 프레임 콜백이 한 번도 불리지 않았는데도
+      전환 200건이 모두 정상이었습니다.
+    </p>
+  </div>
+
+  <h3>롤링 윈도우</h3>
+  <p>
+    하루치 런다운은 서버가 통째로 들고 있지만, 출력창에는 <strong>지금 필요한 구간만</strong> 보냅니다.
+    24시간 채널의 출력창에 필요한 것은 앞으로의 몇십 분뿐입니다.
+  </p>
+  <dl class="kv">
+    <dt>구간</dt><dd>현재 −1분 ~ +20분</dd>
+    <dt>갱신</dt><dd>20초마다</dd>
+    <dt>효과</dt><dd>7,406항목 2.2MB → <strong>109항목 39KB</strong></dd>
+  </dl>
+  <p>
+    구간별로 새로 생성하지 않고 <strong>잘라 보내는</strong> 이유가 있습니다.
+    블록 안의 재생 순서는 블록 시작부터 누적되므로, 중간부터 생성하면
+    하루치로 생성했을 때와 다른 편성이 나옵니다.
+  </p>
+
+  <h3>주요 API</h3>
+  <div class="tw"><table>
+    <tr><th>엔드포인트</th><th>하는 일</th></tr>
+    <tr><td><code>GET /api/library</code></td><td>라이브러리 조회</td></tr>
+    <tr><td><code>POST /api/library/scan</code></td><td><code>media/</code> 재스캔</td></tr>
+    <tr><td><code>GET /api/pools</code></td><td>소스 그룹 목록</td></tr>
+    <tr><td><code>GET POST /api/channels</code></td><td>채널 조회 · 생성</td></tr>
+    <tr><td><code>GET POST /api/channels/:id/blocks</code></td><td>편성 블록 · 자동 채움</td></tr>
+    <tr><td><code>POST /api/channels/:id/rundown/generate</code></td><td>런다운 생성</td></tr>
+    <tr><td><code>POST /api/channels/:id/rundown/move</code></td><td>항목 하나 이동</td></tr>
+    <tr><td><code>GET /api/channels/:id/window</code></td><td>현재 롤링 윈도우</td></tr>
+    <tr><td><code>GET POST /api/outputs</code></td><td>출력 조회 · 추가</td></tr>
+    <tr><td><code>POST /api/sources/:kind</code></td><td>원격 소스 자격증명 저장·확인</td></tr>
+    <tr><td><code>GET /api/seams</code> · <code>/api/heap</code></td><td>전환 계측 · 메모리 추이</td></tr>
+    <tr><td><code>WS /ws?ch=&lt;채널&gt;</code></td><td>출력창용 실시간 채널. 채널을 지정하지 않으면 전체 수신</td></tr>
+  </table></div>
+
+  <div class="note warn">
+    <span class="lbl">재정렬은 전체를 보내지 않습니다</span>
+    <p>
+      항목 하나를 옮길 때 하루치 전체를 올리면 7,680항목 = 2.2MB로 본문 한계를 넘어 실패합니다.
+      옮긴 사실만 보냅니다 — <strong>2.2MB → 40바이트</strong>.
+    </p>
+  </div>
+</section>
+
+<!-- 11 ───────────────────────────────────── -->
+<section id="s11">
+  <h2>실측 데이터</h2>
+  <p class="sub">
+    아래는 모두 실제로 측정한 값입니다. 측정 환경은
+    Apple Silicon MacBook Pro · 3456×2234 Retina 입니다.
+  </p>
+
+  <h3>전환 품질</h3>
+  <div class="tw"><table>
+    <tr><th>조건</th><th>간극 평균</th><th>최대</th><th>의심</th></tr>
+    <tr><td>로컬 파일 (프리롤 적용 전)</td><td class="num">73.5 ms</td><td class="num">77.3 ms</td><td class="num">0</td></tr>
+    <tr><td><strong>로컬 파일 (프리롤 적용)</strong></td><td class="num"><strong>11.7 ms</strong></td><td class="num">14.0 ms</td><td class="num">0</td></tr>
+    <tr><td>파일 ↔ HLS 혼합</td><td class="num">11.2 ms</td><td class="num">13.3 ms</td><td class="num">0</td></tr>
+  </table></div>
+  <p>
+    한 프레임 간격(30fps 기준 33.3ms)보다 짧으므로 전환이 눈에 보이지 않습니다.
+    <strong>HLS 소스가 무결절 품질을 떨어뜨리지 않습니다.</strong>
+  </p>
+
+  <h3>채널 수에 따른 부하</h3>
+  <p class="sub">1080p30 · 15~18 Mbps 소재 기준.</p>
+  <div class="tw"><table>
+    <tr><th>채널</th><th>지각</th><th>전환 보류</th><th>버퍼 미달</th><th>간극 중앙값</th><th>힙</th></tr>
+    <tr><td class="num">1</td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="num">12.6 ms</td><td class="num">1.3~2.3 MB</td></tr>
+    <tr><td class="num">2</td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="num">15.4 ms</td><td class="num">1.3~2.2 MB</td></tr>
+    <tr><td class="num">4</td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="num">13.1 ms</td><td class="num">1.4~1.8 MB</td></tr>
+    <tr><td class="num">6</td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="num">12.2 ms</td><td class="num">1.3~2.0 MB</td></tr>
+  </table></div>
+  <div class="note">
+    <span class="lbl">이 표는 한계치가 아닙니다</span>
+    <p>
+      6채널까지 열화 신호가 하나도 없었으므로 이 기기의 한계는 <strong>6보다 위</strong>에 있습니다.
+      위 표는 <strong>측정된 범위</strong>입니다. 더 낮은 사양에서는 다시 재야 합니다.
+    </p>
+  </div>
+
+  <h3>편성 화면 반응성</h3>
+  <div class="tw"><table>
+    <tr><th>항목</th><th>값</th><th>기준</th></tr>
+    <tr><td>런다운 1,000행 드래그 — 이동 1회</td><td class="num">0.49 ms</td><td>프레임 예산의 2.9%</td></tr>
+    <tr><td>드래그 시작 (행 위치 캐싱)</td><td class="num">2.5 ms</td><td>—</td></tr>
+    <tr><td>하루치 편성 생성 (7,406항목)</td><td class="num">29 ms</td><td>—</td></tr>
+  </table></div>
+</section>
+
+<!-- 12 ───────────────────────────────────── -->
+<section id="s12">
+  <h2>문제 해결</h2>
+
+  <div class="tw"><table>
+    <tr><th>증상</th><th>원인과 조치</th></tr>
+    <tr>
+      <td><strong>앱은 떴는데 창이 안 열림</strong></td>
+      <td>서버 기동 실패입니다. 오류 창의 내용을 확인하세요. 다른 인스턴스가 이미 실행 중일 수 있습니다.</td>
+    </tr>
+    <tr>
+      <td><strong>라이브러리에 영상이 안 보임</strong></td>
+      <td>ffprobe를 찾지 못하면 길이를 읽을 수 없어 <span class="pill warn">길이 없음</span>으로 표시됩니다.
+          <code>FFPROBE_PATH</code>를 지정하세요.</td>
+    </tr>
+    <tr>
+      <td><strong>Cloudflare 목록이 비어 있음</strong></td>
+      <td><code>creator</code> 값이 실제 영상의 creator와 다릅니다. 업로드 시 지정했는지 확인하세요.
+          <strong>비우지는 마세요</strong> — CMS 영상이 딸려 옵니다.</td>
+    </tr>
+    <tr>
+      <td><strong>Bunny 영상이 재생 안 됨</strong></td>
+      <td>인코딩이 끝나지 않았을 수 있습니다(<span class="pill warn">준비 중</span>).
+          서버에서 <code>curl</code>로 403이 나오는 것은 정상입니다 — 브라우저에서는 재생됩니다.</td>
+    </tr>
+    <tr>
+      <td><strong>편성에 공백이 생김</strong></td>
+      <td>자동 채움이 꺼져 있거나 소재가 부족합니다. 런다운의 경고 행에서 바로 채울 수 있습니다.</td>
+    </tr>
+    <tr>
+      <td><strong>계측이 "계측 불가"</strong></td>
+      <td>출력창이 가려져 있습니다. 재생은 정상입니다.</td>
+    </tr>
+    <tr>
+      <td><strong>OBS 캡처 해상도가 두 배</strong></td>
+      <td>화면 배율 문제입니다. HC LIVE가 자동 보정하지만, 출력창을 수동으로 만들었다면
+          요청 해상도를 배율로 나눠 지정하세요.</td>
+    </tr>
+    <tr>
+      <td><strong>여러 모니터에서 소리가 겹침</strong></td>
+      <td>오디오 담당이 둘 이상일 수 없지만, 채널이 여럿이면 시스템 기본 출력에서 섞입니다.
+          전용 오디오 장치를 쓰세요.</td>
+    </tr>
+    <tr>
+      <td><strong>런다운 항목이 너무 많음</strong></td>
+      <td>자동 채움 소재가 짧습니다. 1분 이상 소재를 쓰거나 블록으로 시간을 더 채우세요.</td>
+    </tr>
+  </table></div>
+</section>
+
+<!-- 13 ───────────────────────────────────── -->
+<section id="s13">
+  <h2>알려진 제약</h2>
+  <p class="sub">확인된 것과 확인하지 못한 것을 구분해 적습니다.</p>
+
+  <h3>의도적으로 하지 않는 것</h3>
+  <div class="tw"><table>
+    <tr><th>항목</th><th>이유</th></tr>
+    <tr><td><strong>4K 출력</strong></td>
+        <td>보류 상태입니다. 개발·검증·권장 구성이 모두 1080p 기준입니다.
+            창 캡처에 실제 4K 픽셀의 화면 표면이 필요하고, 디코더 부담이 큽니다</td></tr>
+    <tr><td><strong>모니터 5대 이상</strong></td>
+        <td>4대가 설계 상한입니다. 같은 화면을 여러 대에 띄우는 것이 목적이면
+            OS 디스플레이 미러링이 디코딩 1회로 끝납니다</td></tr>
+    <tr><td><strong>가상 라이브(FAST)</strong></td>
+        <td>미리 만든 세그먼트를 이어붙이는 방식은 유튜브 소스·오버레이·카메라 합성을
+            모두 잃습니다. 얻는 것은 서버 한 대 값입니다</td></tr>
+  </table></div>
+
+  <h3>아직 검증하지 못한 것</h3>
+  <div class="tw"><table>
+    <tr><th>항목</th><th>상태</th></tr>
+    <tr><td>모니터 직출력</td><td>외부 모니터가 있어야 확인 가능합니다. 창 출력은 검증됨</td></tr>
+    <tr><td>OBS 캡처 픽셀 내용</td><td>창 인식과 해상도는 확인했으나, 실제 화면 내용은 사람이 미리보기로 봐야 합니다</td></tr>
+    <tr><td>장시간 운전</td><td>최장 40분까지 확인했습니다. 목표는 72시간입니다</td></tr>
+    <tr><td>NDI 출력</td><td>미구현. 화면 공간이 부족해질 때 착수합니다</td></tr>
+    <tr><td>유튜브 소스</td><td>어댑터 미구현. 임베드 특성상 무결절은 최선 노력에 그칩니다</td></tr>
+  </table></div>
+
+  <div class="note warn">
+    <span class="lbl">유튜브 소스의 한계</span>
+    <p>
+      유튜브 임베드는 앱이 재생 품질을 지정할 수 없고, 광고·버퍼링 타이밍도 통제 밖입니다.
+      온에어가 중요한 채널은 본인 유튜브 콘텐츠를 <strong>Cloudflare Stream이나 Bunny Stream에
+      미러링</strong>해 그쪽을 편성하는 것을 권합니다.
+    </p>
+  </div>
+</section>
+
+</main>
+</div>
+
+<footer>
+  <div class="wrap">
+    HC LIVE · 24/7 Broadcast Automation System · 관리자 설명서 v0.1 (2026-08-28)<br>
+    설계 근거와 결정 기록은 저장소의 <code>docs/기획서.md</code>에 있습니다.
+  </div>
+</footer>
